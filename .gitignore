@@ -1,0 +1,12 @@
+db/data/*
+/db/data/
+../db/data/*
+
+# Build artifacts and downloadable binaries should not be committed to GitHub.
+/src/public/downloads/*.apk
+
+# Local machine and secret files.
+.DS_Store
+.env
+/nginx/ssl/*.crt
+/nginx/ssl/*.key
