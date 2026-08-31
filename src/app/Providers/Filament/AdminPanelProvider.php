@@ -37,7 +37,7 @@ class AdminPanelProvider extends PanelProvider
             ->defaultThemeMode(ThemeMode::Light)
             ->font('Montserrat')
             ->colors([
-                'primary' => Color::Blue,
+                'primary' => Color::hex('#3E735B'),
             ])
             ->maxContentWidth(MaxWidth::SevenExtraLarge)
             ->sidebarCollapsibleOnDesktop()

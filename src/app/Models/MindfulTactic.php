@@ -14,7 +14,19 @@ class MindfulTactic extends Model
         'title',
         'category',
         'description',
+        'knowledge',
+        'duration_minutes',
+        'steps',
+        'cues',
+        'best_for',
         'sort_order',
+    ];
+
+    protected $casts = [
+        'duration_minutes' => 'integer',
+        'steps' => 'array',
+        'cues' => 'array',
+        'best_for' => 'array',
     ];
 
     public function bookmarkedBy(): BelongsToMany

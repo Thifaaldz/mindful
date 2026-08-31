@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schedule;
 use App\Models\User;
+use App\Services\BurnoutAnalysisService;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -45,3 +46,29 @@ Artisan::command('reminders:send', function () {
 })->purpose('Send daily email mindfulness reminders');
 
 Schedule::command('reminders:send')->everyMinute();
+
+Artisan::command('burnout:weekly-analysis', function (BurnoutAnalysisService $analysisService) {
+    [$periodStart, $periodEnd] = $analysisService->periodRange('weekly', now()->subWeek());
+
+    User::role(['teacher', 'student'])
+        ->chunkById(100, function ($users) use ($analysisService, $periodStart, $periodEnd) {
+            foreach ($users as $user) {
+                $alreadyAnalyzed = $user->burnoutAnalysisSnapshots()
+                    ->where('source', 'auto_weekly')
+                    ->where('period_type', 'weekly')
+                    ->whereDate('period_start', $periodStart)
+                    ->whereDate('period_end', $periodEnd)
+                    ->exists();
+
+                if ($alreadyAnalyzed) {
+                    continue;
+                }
+
+                $analysisService->analyze($user, 'weekly', $periodStart, 'auto_weekly');
+            }
+        });
+
+    $this->info('Weekly burnout analysis diproses.');
+})->purpose('Run automatic weekly activity-ledger burnout analysis');
+
+Schedule::command('burnout:weekly-analysis')->weeklyOn(1, '06:00');

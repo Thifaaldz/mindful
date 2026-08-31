@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'mindful_ml' => [
+        'url' => env('MINDFULEDU_ML_URL'),
+    ],
+
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+    ],
+
 ];

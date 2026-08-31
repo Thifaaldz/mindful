@@ -1,5 +1,5 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api.dart';
@@ -72,8 +72,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
               final data = snapshot.data!;
               final summary = _jsonMap(data['summary']);
-              final trend = _jsonMap(data['calmness_trend']);
-              final badges = (data['badges'] as List? ?? []).cast<dynamic>();
+              final calendar = _jsonMap(data['activity_calendar']);
+              final latestAnalysis = _jsonMap(data['latest_analysis']);
 
               return ListView(
                 padding: const EdgeInsets.only(bottom: 28),
@@ -90,7 +90,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Ringkasan hari ini',
+                          'Ringkasan activity ledger hari ini',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 26),
@@ -100,47 +100,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 30),
-                  const SectionTitle('Tren Ketenangan 7 Hari'),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 28),
-                    child: SoftCard(
-                      child: SizedBox(
-                        height: 210,
-                        child: _CalmnessChart(trend: trend),
-                      ),
-                    ),
-                  ),
                   const SizedBox(height: 28),
                   SectionTitle(
-                    'Pencapaian',
+                    'Kalender Aktivitas',
                     trailing: Text(
-                      'Lihat Semua',
+                      'Bulan Ini',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
-                  SizedBox(
-                    height: 74,
-                    child: badges.isEmpty
-                        ? const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 28),
-                            child: SoftCard(
-                              child: Text('Belum ada badge. Terus berlatih!'),
-                            ),
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.symmetric(horizontal: 28),
-                            scrollDirection: Axis.horizontal,
-                            itemCount: badges.length,
-                            separatorBuilder: (context, index) =>
-                                const SizedBox(width: 12),
-                            itemBuilder: (context, index) {
-                              final badge = _jsonMap(badges[index]);
-                              return _BadgeCard(
-                                label: '${badge['name'] ?? 'Badge'}',
-                              );
-                            },
-                          ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
+                    child: _ActivityCalendarCard(calendar: calendar),
+                  ),
+                  const SizedBox(height: 28),
+                  const SectionTitle('Analisis Terakhir'),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
+                    child: _LatestAnalysisCard(analysis: latestAnalysis),
                   ),
                   const SizedBox(height: 28),
                   const SectionTitle('Akses Cepat'),
@@ -149,9 +125,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: Row(
                       children: [
                         _QuickAccess(
-                          icon: Icons.menu_book_outlined,
-                          label: 'Logbook',
+                          icon: Icons.event_note_outlined,
+                          label: 'Aktivitas',
                           onTap: () => requestTeacherTab(1),
+                        ),
+                        _QuickAccess(
+                          icon: Icons.insights_outlined,
+                          label: 'Analisis',
+                          onTap: () => requestTeacherTab(2),
                         ),
                         _QuickAccess(
                           icon: Icons.medical_services_outlined,
@@ -159,14 +140,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           onTap: () => requestTeacherTab(3),
                         ),
                         _QuickAccess(
-                          icon: Icons.visibility_outlined,
-                          label: 'Observasi',
-                          onTap: () => requestTeacherTab(2),
-                        ),
-                        _QuickAccess(
-                          icon: Icons.eco_outlined,
-                          label: 'Grounding',
-                          onTap: () => requestTeacherTab(3),
+                          icon: Icons.person_outline,
+                          label: 'Profil',
+                          onTap: () => requestTeacherTab(4),
                         ),
                       ],
                     ),
@@ -211,11 +187,11 @@ class _HeroStartCard extends StatelessWidget {
               CircleAvatar(
                 radius: 24,
                 backgroundColor: Colors.white.withValues(alpha: 0.2),
-                child: const Icon(Icons.play_arrow, color: Colors.white),
+                child: const Icon(Icons.add_task, color: Colors.white),
               ),
               const SizedBox(width: 14),
               const Text(
-                'Mulai Latihan',
+                'Tambah Aktivitas',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 16,
@@ -237,33 +213,34 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avgAfter = (summary['avg_calmness_after'] as num? ?? 0).toDouble();
+    final weightedActual = (summary['weighted_actual_hours_today'] as num? ?? 0)
+        .toDouble();
     return Row(
       children: [
         Expanded(
           child: MetricTile(
             icon: Icons.event_note_outlined,
-            label: 'Total Sesi',
-            value: '${summary['total_sessions'] ?? 0}',
-            caption: 'Sesi',
+            label: 'Planned',
+            value: '${summary['planned_activities_today'] ?? 0}',
+            caption: 'Activity',
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: MetricTile(
             icon: Icons.trending_up,
-            label: 'Rata-rata',
-            value: '${(avgAfter * 10).round()}%',
-            caption: 'Baik',
+            label: 'Completed',
+            value: '${summary['completed_activities_today'] ?? 0}',
+            caption: 'Ledger',
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: MetricTile(
             icon: Icons.notifications_active_outlined,
-            label: 'Distraksi',
-            value: '${summary['avg_distraction_score'] ?? 0}',
-            caption: 'Kali',
+            label: 'WAH',
+            value: weightedActual.toStringAsFixed(1),
+            caption: 'Jam',
             color: const Color(0xFFD99B3D),
           ),
         ),
@@ -272,32 +249,208 @@ class _StatsRow extends StatelessWidget {
   }
 }
 
-class _BadgeCard extends StatelessWidget {
-  const _BadgeCard({required this.label});
+class _ActivityCalendarCard extends StatelessWidget {
+  const _ActivityCalendarCard({required this.calendar});
 
-  final String label;
+  final Map<String, dynamic> calendar;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 190,
-      child: SoftCard(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            const CircleAvatar(
-              backgroundColor: Color(0xFFEAF7FF),
-              child: Icon(
-                Icons.workspace_premium_outlined,
-                color: Color(0xFF24718E),
+    final monthText =
+        '${calendar['month'] ?? DateFormat('yyyy-MM').format(DateTime.now())}';
+    final month = DateTime.tryParse('$monthText-01') ?? DateTime.now();
+    final days = _jsonMap(calendar['days']);
+    final firstDay = DateTime(month.year, month.month);
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    final leadingBlank = firstDay.weekday - 1;
+    final totalCells = leadingBlank + daysInMonth;
+    final rowCount = (totalCells / 7).ceil();
+    final today = DateTime.now();
+
+    return SoftCard(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: AppTheme.mint,
+                child: const Icon(
+                  Icons.calendar_month_outlined,
+                  color: AppTheme.olive,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  DateFormat('MMMM yyyy', 'id_ID').format(month),
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: const ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']
+                .map(
+                  (label) => Expanded(
+                    child: Center(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          color: AppTheme.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 8),
+          for (var row = 0; row < rowCount; row++)
+            Padding(
+              padding: EdgeInsets.only(bottom: row == rowCount - 1 ? 0 : 8),
+              child: Row(
+                children: List.generate(7, (column) {
+                  final cellIndex = row * 7 + column;
+                  final dayNumber = cellIndex - leadingBlank + 1;
+                  if (dayNumber < 1 || dayNumber > daysInMonth) {
+                    return const Expanded(child: SizedBox(height: 42));
+                  }
+
+                  final date = DateTime(month.year, month.month, dayNumber);
+                  final key = DateFormat('yyyy-MM-dd').format(date);
+                  final dayData = _jsonMap(days[key]);
+                  final planned = dayData['planned'] as int? ?? 0;
+                  final completed = dayData['completed'] as int? ?? 0;
+                  final hasPending = dayData['has_pending'] == true;
+                  final hasActivity = planned > 0;
+                  final color = hasActivity
+                      ? hasPending
+                            ? const Color(0xFFD99B3D)
+                            : AppTheme.olive
+                      : AppTheme.line;
+                  final selected = _isSameDay(date, today);
+
+                  return Expanded(
+                    child: InkWell(
+                      onTap: () => requestTeacherActivityDate(date),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        height: 42,
+                        margin: const EdgeInsets.symmetric(horizontal: 2),
+                        decoration: BoxDecoration(
+                          color: selected ? AppTheme.mint : Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: selected ? AppTheme.olive : AppTheme.line,
+                          ),
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Text(
+                              '$dayNumber',
+                              style: TextStyle(
+                                fontWeight: selected
+                                    ? FontWeight.w800
+                                    : FontWeight.w600,
+                                color: hasActivity
+                                    ? AppTheme.ink
+                                    : AppTheme.muted,
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 5,
+                              child: Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                            if (planned > 1)
+                              Positioned(
+                                right: 4,
+                                top: 4,
+                                child: Text(
+                                  '$completed/$planned',
+                                  style: const TextStyle(
+                                    color: AppTheme.muted,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+}
+
+class _LatestAnalysisCard extends StatelessWidget {
+  const _LatestAnalysisCard({required this.analysis});
+
+  final Map<String, dynamic> analysis;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasData = analysis.isNotEmpty;
+    final category = '${analysis['category'] ?? 'belum ada'}';
+    final score = analysis['final_burnout_risk_score'];
+    final recommendation = _jsonMap(analysis['recommendation_summary']);
+    final color = _analysisColor(category);
+
+    return SoftCard(
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: color.withValues(alpha: 0.12),
+            child: Icon(Icons.insights_outlined, color: color),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                StatusPill(
+                  label: hasData ? category.toUpperCase() : 'BELUM ADA',
+                  color: color,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  hasData
+                      ? 'Final risk: ${score ?? '-'}'
+                      : 'Jalankan analisis setelah ada aktivitas completed.',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                if ('${recommendation['practice'] ?? ''}'.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '${recommendation['practice']}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -340,81 +493,15 @@ Map<String, dynamic> _jsonMap(dynamic value) {
   return <String, dynamic>{};
 }
 
-class _CalmnessChart extends StatelessWidget {
-  const _CalmnessChart({required this.trend});
+bool _isSameDay(DateTime a, DateTime b) {
+  return a.year == b.year && a.month == b.month && a.day == b.day;
+}
 
-  final Map<String, dynamic> trend;
-
-  @override
-  Widget build(BuildContext context) {
-    if (trend.isEmpty) {
-      return const Center(child: Text('Belum ada data sesi.'));
-    }
-
-    final dates = trend.keys.toList();
-    final afterSpots = <FlSpot>[];
-    for (var i = 0; i < dates.length; i++) {
-      final entry = _jsonMap(trend[dates[i]]);
-      afterSpots.add(
-        FlSpot(
-          i.toDouble(),
-          ((entry['calmness_after'] as num? ?? 0) * 10).toDouble(),
-        ),
-      );
-    }
-
-    return LineChart(
-      LineChartData(
-        minY: 0,
-        maxY: 100,
-        gridData: FlGridData(
-          drawVerticalLine: false,
-          getDrawingHorizontalLine: (_) =>
-              FlLine(color: AppTheme.line, strokeWidth: 1, dashArray: [4, 4]),
-        ),
-        titlesData: FlTitlesData(
-          topTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false),
-          ),
-          rightTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false),
-          ),
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 42,
-              interval: 25,
-              getTitlesWidget: (value, meta) => Text('${value.round()}%'),
-            ),
-          ),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              getTitlesWidget: (value, meta) {
-                final index = value.toInt();
-                if (index < 0 || index >= dates.length) {
-                  return const SizedBox.shrink();
-                }
-                return Text(dates[index].substring(5));
-              },
-            ),
-          ),
-        ),
-        borderData: FlBorderData(show: false),
-        lineBarsData: [
-          LineChartBarData(
-            spots: afterSpots,
-            isCurved: true,
-            color: AppTheme.olive,
-            barWidth: 4,
-            dotData: const FlDotData(show: true),
-            belowBarData: BarAreaData(
-              show: true,
-              color: AppTheme.olive.withValues(alpha: 0.08),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+Color _analysisColor(String category) {
+  return switch (category) {
+    'merah' => const Color(0xFFC65A4A),
+    'kuning' => const Color(0xFFD99B3D),
+    'hijau' => AppTheme.olive,
+    _ => AppTheme.muted,
+  };
 }

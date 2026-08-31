@@ -34,6 +34,18 @@ class MindfulTacticResource extends Resource
                 Forms\Components\Textarea::make('description')
                     ->required()
                     ->columnSpanFull(),
+                Forms\Components\Textarea::make('knowledge')
+                    ->columnSpanFull(),
+                Forms\Components\TextInput::make('duration_minutes')
+                    ->required()
+                    ->numeric()
+                    ->default(3),
+                Forms\Components\TagsInput::make('best_for')
+                    ->columnSpanFull(),
+                Forms\Components\TagsInput::make('steps')
+                    ->columnSpanFull(),
+                Forms\Components\TagsInput::make('cues')
+                    ->columnSpanFull(),
                 Forms\Components\TextInput::make('sort_order')
                     ->required()
                     ->numeric()
@@ -49,6 +61,10 @@ class MindfulTacticResource extends Resource
                     ->searchable(),
                 Tables\Columns\TextColumn::make('category')
                     ->searchable(),
+                Tables\Columns\TextColumn::make('duration_minutes')
+                    ->numeric()
+                    ->suffix(' menit')
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('sort_order')
                     ->numeric()
                     ->sortable(),

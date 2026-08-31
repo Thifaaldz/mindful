@@ -9,88 +9,136 @@ class Api {
     return res.data as Map<String, dynamic>;
   }
 
-  static Future<List<dynamic>> classes() async {
-    final res = await _api.get('/classes');
-    return res.data as List<dynamic>;
-  }
-
-  static Future<List<dynamic>> studentsInClass(int classId) async {
-    final res = await _api.get('/classes/$classId/students');
-    return res.data as List<dynamic>;
-  }
-
-  static Future<Map<String, dynamic>> startSession() async {
-    final res = await _api.post('/mindfulness-sessions');
+  static Future<Map<String, dynamic>> activities({required String date}) async {
+    final res = await _api.get('/activities', query: {'date': date});
     return res.data as Map<String, dynamic>;
   }
 
-  static Future<Map<String, dynamic>> finishSession({
-    required int sessionId,
-    required int durationSeconds,
-    required int distractionScore,
-    required int calmnessBefore,
-    required int calmnessAfter,
-    String? reflection,
-    String? bodyNote,
-    String? helpfulNote,
-    Map<String, int>? logbookAnswers,
-  }) async {
-    final res = await _api.put(
-      '/mindfulness-sessions/$sessionId',
-      data: {
-        'duration_seconds': durationSeconds,
-        'distraction_score': distractionScore,
-        'calmness_before': calmnessBefore,
-        'calmness_after': calmnessAfter,
-        'reflection': reflection,
-        'body_note': bodyNote,
-        'helpful_note': helpfulNote,
-        'logbook_answers': logbookAnswers,
-      },
-    );
-    return res.data as Map<String, dynamic>;
-  }
-
-  static Future<Map<String, dynamic>> sessionHistory({int page = 1}) async {
-    final res = await _api.get('/mindfulness-sessions', query: {'page': page});
-    return res.data as Map<String, dynamic>;
-  }
-
-  static Future<Map<String, dynamic>> saveObservation({
-    required int studentId,
-    required int classId,
-    required String perasaan,
-    required String perilaku,
-    required String tubuh,
-    required String teman,
-    required String belajar,
-    String? notes,
+  static Future<Map<String, dynamic>> createActivity({
+    required String title,
+    String? activityDate,
+    String? startTime,
+    String? endTime,
+    String? category,
+    String? repeatType,
+    String? repeatUntil,
   }) async {
     final res = await _api.post(
-      '/observations',
+      '/activities',
       data: {
-        'student_id': studentId,
-        'class_id': classId,
-        'perasaan': perasaan,
-        'perilaku': perilaku,
-        'tubuh': tubuh,
-        'teman': teman,
-        'belajar': belajar,
-        'notes': notes,
+        'title': title,
+        'activity_date': activityDate,
+        'start_time': startTime,
+        'end_time': endTime,
+        'category': category,
+        'repeat_type': repeatType,
+        'repeat_until': repeatUntil,
       },
     );
     return res.data as Map<String, dynamic>;
   }
 
-  static Future<List<dynamic>> flaggedObservations() async {
-    final res = await _api.get('/observations/flagged');
-    return res.data as List<dynamic>;
+  static Future<Map<String, dynamic>> updateActivity({
+    required int activityId,
+    required String title,
+    String? activityDate,
+    String? startTime,
+    String? endTime,
+    String? category,
+  }) async {
+    final res = await _api.put(
+      '/activities/$activityId',
+      data: {
+        'title': title,
+        'activity_date': activityDate,
+        'start_time': startTime,
+        'end_time': endTime,
+        'category': category,
+      },
+    );
+    return res.data as Map<String, dynamic>;
   }
 
-  static Future<Map<String, dynamic>> studentObservationHistory(
-    int studentId,
-  ) async {
-    final res = await _api.get('/students/$studentId/observations');
+  static Future<Map<String, dynamic>> cancelActivity(int activityId) async {
+    final res = await _api.post('/activities/$activityId/cancel');
+    return res.data as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> duplicateActivity(
+    int activityId, {
+    String? activityDate,
+  }) async {
+    final res = await _api.post(
+      '/activities/$activityId/duplicate',
+      data: {'activity_date': activityDate},
+    );
+    return res.data as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> checkInActivity({
+    required int activityId,
+    String? mood,
+    int? intensity,
+    String? trigger,
+  }) async {
+    final res = await _api.post(
+      '/activities/$activityId/check-in',
+      data: {'mood': mood, 'intensity': intensity, 'trigger': trigger},
+    );
+    return res.data as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> checkOutActivity({
+    required int activityId,
+    String? mood,
+    String? fact,
+    String? feeling,
+    String? pattern,
+    String? plan,
+    List<String>? burnoutTags,
+  }) async {
+    final res = await _api.post(
+      '/activities/$activityId/check-out',
+      data: {
+        'mood': mood,
+        'fact': fact,
+        'feeling': feeling,
+        'pattern': pattern,
+        'plan': plan,
+        'burnout_tags': burnoutTags,
+      },
+    );
+    return res.data as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> createBurnoutAnalysis({
+    required String periodType,
+    required String date,
+  }) async {
+    final res = await _api.post(
+      '/burnout-analyses',
+      data: {'period_type': periodType, 'date': date},
+    );
+    return res.data as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> burnoutAnalyses({int page = 1}) async {
+    final res = await _api.get('/burnout-analyses', query: {'page': page});
+    return res.data as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> burnoutOverview() async {
+    final res = await _api.get('/burnout-analyses/overview');
+    return res.data as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> saveBurnoutSelfReport({
+    required int level,
+  }) async {
+    final res = await _api.post(
+      '/burnout-self-reports',
+      data: {'level': level},
+    );
     return res.data as Map<String, dynamic>;
   }
 
@@ -102,28 +150,6 @@ class Api {
   static Future<bool> toggleBookmark(int tacticId) async {
     final res = await _api.post('/toolkit/tactics/$tacticId/bookmark');
     return (res.data as Map<String, dynamic>)['is_bookmarked'] as bool;
-  }
-
-  static Future<Map<String, dynamic>?> latestQuestionnaire() async {
-    final res = await _api.get('/questionnaire/latest');
-    return (res.data as Map<String, dynamic>)['response']
-        as Map<String, dynamic>?;
-  }
-
-  static Future<Map<String, dynamic>> submitQuestionnaire({
-    required Map<String, String> respondentProfile,
-    required Map<String, int> answers,
-    String? comment,
-  }) async {
-    final res = await _api.post(
-      '/questionnaire/responses',
-      data: {
-        'respondent_profile': respondentProfile,
-        'answers': answers,
-        'comment': comment,
-      },
-    );
-    return res.data as Map<String, dynamic>;
   }
 
   static Future<Map<String, dynamic>> reminderPreference() async {

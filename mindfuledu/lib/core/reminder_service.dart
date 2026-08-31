@@ -9,6 +9,7 @@ class ReminderService {
   ReminderService._();
 
   static const int _dailyReminderId = 1107;
+  static const int _activityReminderBase = 200000;
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
 
@@ -88,6 +89,65 @@ class ReminderService {
     return _notifications.cancel(id: _dailyReminderId);
   }
 
+  static Future<void> scheduleActivityReminders({
+    required int activityId,
+    required String title,
+    required DateTime startAt,
+    required DateTime endAt,
+  }) async {
+    await requestPermission();
+    await cancelActivity(activityId);
+
+    final now = DateTime.now();
+    final checkInAt = startAt.subtract(const Duration(minutes: 10));
+    if (checkInAt.isAfter(now)) {
+      await _notifications.zonedSchedule(
+        id: _activityNotificationId(activityId, 0),
+        title: 'Kegiatan akan dimulai',
+        body: '$title segera dimulai. Yuk check-in.',
+        scheduledDate: tz.TZDateTime.from(checkInAt, tz.local),
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'activity_checkin_reminder',
+            'Pengingat check-in',
+            channelDescription: 'Pengingat check-in sebelum aktivitas',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(),
+          macOS: DarwinNotificationDetails(),
+        ),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      );
+    }
+
+    if (endAt.isAfter(now)) {
+      await _notifications.zonedSchedule(
+        id: _activityNotificationId(activityId, 1),
+        title: 'Waktunya check-out',
+        body: 'Catat kondisi setelah $title agar ledger lengkap.',
+        scheduledDate: tz.TZDateTime.from(endAt, tz.local),
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'activity_checkout_reminder',
+            'Pengingat check-out',
+            channelDescription: 'Pengingat check-out setelah aktivitas',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(),
+          macOS: DarwinNotificationDetails(),
+        ),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      );
+    }
+  }
+
+  static Future<void> cancelActivity(int activityId) async {
+    await _notifications.cancel(id: _activityNotificationId(activityId, 0));
+    await _notifications.cancel(id: _activityNotificationId(activityId, 1));
+  }
+
   static tz.TZDateTime _nextInstance(TimeOfDay time) {
     final now = tz.TZDateTime.now(tz.local);
     var scheduled = tz.TZDateTime(
@@ -104,5 +164,9 @@ class ReminderService {
     }
 
     return scheduled;
+  }
+
+  static int _activityNotificationId(int activityId, int offset) {
+    return _activityReminderBase + (activityId % 100000) * 2 + offset;
   }
 }

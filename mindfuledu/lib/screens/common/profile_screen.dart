@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../core/app_theme.dart';
 import '../../core/session.dart';
 import '../../widgets/app_chrome.dart';
-import 'questionnaire_screen.dart';
 import 'reminder_settings_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -81,17 +80,6 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 22),
-                  _ActionCard(
-                    icon: Icons.assignment_outlined,
-                    title: 'Kuesioner Evaluasi',
-                    subtitle: 'Usability, penerimaan, dan saran.',
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const QuestionnaireScreen(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
                   _ActionCard(
                     icon: Icons.notifications_active_outlined,
                     title: 'Pengingat Harian',

@@ -27,11 +27,14 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
      */
     protected $fillable = [
         'avatar_url',
+        'google_id',
+        'google_avatar_url',
         'name',
         'email',
         'password',
         'school',
         'class_id',
+        'profile_completed',
         'reminder_enabled',
         'reminder_time',
         'reminder_channel',
@@ -59,6 +62,7 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'profile_completed' => 'boolean',
             'reminder_enabled' => 'boolean',
             'last_reminder_sent_at' => 'datetime',
         ];
@@ -68,6 +72,8 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
     {
         if ($this->avatar_url) {
             return asset('storage/' . $this->avatar_url);
+        } elseif ($this->google_avatar_url) {
+            return $this->google_avatar_url;
         } else {
             $hash = md5(strtolower(trim($this->email)));
 
@@ -99,6 +105,21 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
     public function mindfulnessSessions(): HasMany
     {
         return $this->hasMany(MindfulnessSession::class);
+    }
+
+    public function activities(): HasMany
+    {
+        return $this->hasMany(Activity::class);
+    }
+
+    public function burnoutAnalysisSnapshots(): HasMany
+    {
+        return $this->hasMany(BurnoutAnalysisSnapshot::class);
+    }
+
+    public function burnoutSelfReports(): HasMany
+    {
+        return $this->hasMany(BurnoutSelfReport::class);
     }
 
     /**

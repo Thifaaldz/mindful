@@ -21,6 +21,11 @@ class ToolkitController extends Controller
                 'title' => $tactic->title,
                 'category' => $tactic->category,
                 'description' => $tactic->description,
+                'knowledge' => $tactic->knowledge,
+                'duration_minutes' => $tactic->duration_minutes,
+                'steps' => $tactic->steps ?? [],
+                'cues' => $tactic->cues ?? [],
+                'best_for' => $tactic->best_for ?? [],
                 'is_bookmarked' => $bookmarkedIds->contains($tactic->id),
             ];
         });
