@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
@@ -13,9 +15,22 @@ import 'widgets/app_chrome.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('id_ID');
-  await ReminderService.initialize();
+  await _safeStartupInitialize();
   runApp(const MindfulEduApp());
+}
+
+Future<void> _safeStartupInitialize() async {
+  try {
+    await initializeDateFormatting('id_ID').timeout(const Duration(seconds: 3));
+  } catch (_) {
+    // The app can still render with fallback date formatting.
+  }
+
+  unawaited(
+    ReminderService.initialize()
+        .timeout(const Duration(seconds: 5))
+        .catchError((_) {}),
+  );
 }
 
 class MindfulEduApp extends StatelessWidget {
