@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -30,6 +31,21 @@ class Session extends ChangeNotifier {
       isAuthenticated && user?['profile_completed'] != true;
 
   Future<void> bootstrap() async {
+    try {
+      await _bootstrapSession().timeout(const Duration(seconds: 8));
+    } catch (_) {
+      token = null;
+      user = null;
+      savedAccount = null;
+      quickLoginAvailable = false;
+      ApiClient.instance.setToken(null);
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _bootstrapSession() async {
     String? storedToken;
     String? quickLoginEnabled;
     try {
@@ -48,8 +64,6 @@ class Session extends ChangeNotifier {
         await _restoreStoredToken(storedToken, clearOnFailure: true);
       }
     }
-    isLoading = false;
-    notifyListeners();
   }
 
   Future<void> login(
