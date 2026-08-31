@@ -2,6 +2,38 @@ import 'package:flutter/material.dart';
 
 import '../core/app_theme.dart';
 
+class BrandMark extends StatelessWidget {
+  const BrandMark({super.key, this.size = 44, this.radius = 10, this.iconSize});
+
+  final double size;
+  final double radius;
+  final double? iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: size * 0.41,
+            offset: Offset(0, size * 0.18),
+          ),
+        ],
+      ),
+      child: Icon(
+        Icons.eco_outlined,
+        color: AppTheme.olive,
+        size: iconSize ?? size * 0.55,
+      ),
+    );
+  }
+}
+
 class BrandHeader extends StatelessWidget {
   const BrandHeader({super.key, this.trailing});
 
@@ -13,22 +45,7 @@ class BrandHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
       child: Row(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: const Icon(Icons.eco_outlined, color: AppTheme.olive),
-          ),
+          const BrandMark(),
           const SizedBox(width: 12),
           const Text(
             'MindfulApp',

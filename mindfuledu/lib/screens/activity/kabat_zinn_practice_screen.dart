@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 import '../../core/app_theme.dart';
 import '../../widgets/app_chrome.dart';
@@ -20,16 +21,25 @@ class _KabatZinnPracticeScreenState extends State<KabatZinnPracticeScreen>
     with SingleTickerProviderStateMixin {
   late _PracticeMethod _method;
   late int _remainingSeconds;
+  late List<int> _stepDurations;
+  late int _stepRemainingSeconds;
   late final AnimationController _animation;
+  late final FlutterTts _tts;
   Timer? _timer;
   bool _running = false;
   bool _started = false;
+  bool _ttsEnabled = true;
+  int _activeStep = 0;
 
   @override
   void initState() {
     super.initState();
     _method = _methodForSnapshot(widget.snapshot);
     _remainingSeconds = _method.duration.inSeconds;
+    _stepDurations = _buildStepDurations(_method);
+    _stepRemainingSeconds = _stepDurations.first;
+    _tts = FlutterTts();
+    unawaited(_configureTts());
     _animation = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 5),
@@ -39,8 +49,20 @@ class _KabatZinnPracticeScreenState extends State<KabatZinnPracticeScreen>
   @override
   void dispose() {
     _timer?.cancel();
+    unawaited(_tts.stop());
     _animation.dispose();
     super.dispose();
+  }
+
+  Future<void> _configureTts() async {
+    try {
+      await _tts.setLanguage('id-ID');
+      await _tts.setSpeechRate(0.46);
+      await _tts.setPitch(1);
+      await _tts.awaitSpeakCompletion(false);
+    } catch (_) {
+      if (mounted) setState(() => _ttsEnabled = false);
+    }
   }
 
   void _startTimer() {
@@ -48,19 +70,33 @@ class _KabatZinnPracticeScreenState extends State<KabatZinnPracticeScreen>
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!_running || !mounted) return;
       if (_remainingSeconds <= 1) {
-        setState(() => _remainingSeconds = 0);
+        setState(() {
+          _remainingSeconds = 0;
+          _stepRemainingSeconds = 0;
+        });
         _showEvaluation();
         return;
       }
-      setState(() => _remainingSeconds--);
+      if (_stepRemainingSeconds <= 1) {
+        _goToStep(_activeStep + 1, fromTimer: true);
+        return;
+      }
+      setState(() {
+        _remainingSeconds--;
+        _stepRemainingSeconds--;
+      });
     });
   }
 
   void _setMethod(_PracticeMethod method) {
     _timer?.cancel();
+    unawaited(_tts.stop());
     setState(() {
       _method = method;
+      _stepDurations = _buildStepDurations(method);
       _remainingSeconds = method.duration.inSeconds;
+      _stepRemainingSeconds = _stepDurations.first;
+      _activeStep = 0;
       _running = false;
       _started = false;
     });
@@ -68,8 +104,11 @@ class _KabatZinnPracticeScreenState extends State<KabatZinnPracticeScreen>
 
   void _reset() {
     _timer?.cancel();
+    unawaited(_tts.stop());
     setState(() {
       _remainingSeconds = _method.duration.inSeconds;
+      _stepRemainingSeconds = _stepDurations.first;
+      _activeStep = 0;
       _running = false;
       _started = false;
     });
@@ -79,25 +118,94 @@ class _KabatZinnPracticeScreenState extends State<KabatZinnPracticeScreen>
     setState(() {
       _started = true;
       _running = true;
+      _activeStep = 0;
+      _remainingSeconds = _method.duration.inSeconds;
+      _stepRemainingSeconds = _stepDurations.first;
     });
+    _speakCurrentStep();
     _startTimer();
   }
 
   Future<void> _showEvaluation() async {
     _timer?.cancel();
+    await _tts.stop();
+    if (!mounted) return;
     setState(() => _running = false);
 
-    await showModalBottomSheet<void>(
+    final result = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
-      builder: (context) => const _EvaluationSheet(),
+      builder: (sheetContext) => _EvaluationSheet(
+        onSelected: (value) => Navigator.of(sheetContext).pop(value),
+      ),
     );
+    if (!mounted || result == null) return;
+
+    Navigator.of(context).pop(result);
   }
 
   String _formatTime() {
     final minutes = (_remainingSeconds ~/ 60).toString().padLeft(2, '0');
     final seconds = (_remainingSeconds % 60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
+  }
+
+  String _formatStepTime() {
+    final minutes = (_stepRemainingSeconds ~/ 60).toString().padLeft(2, '0');
+    final seconds = (_stepRemainingSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  int _remainingFromStep(int step) {
+    if (_stepDurations.isEmpty) return 0;
+    return _stepDurations.skip(step).fold(0, (total, value) => total + value);
+  }
+
+  void _goToStep(int step, {bool fromTimer = false}) {
+    if (step < 0) return;
+    if (step >= _method.steps.length) {
+      setState(() {
+        _remainingSeconds = 0;
+        _stepRemainingSeconds = 0;
+      });
+      _showEvaluation();
+      return;
+    }
+
+    setState(() {
+      _activeStep = step;
+      _stepRemainingSeconds = _stepDurations[step];
+      _remainingSeconds = _remainingFromStep(step);
+    });
+    _speakCurrentStep(fromTimer: fromTimer);
+  }
+
+  Future<void> _speakCurrentStep({bool fromTimer = false}) async {
+    if (!_ttsEnabled || _method.steps.isEmpty) return;
+
+    final cue = fromTimer
+        ? 'Waktunya lanjut ke langkah ${_activeStep + 1}.'
+        : 'Langkah ${_activeStep + 1} dari ${_method.steps.length}.';
+    await _tts.stop();
+    await _tts.speak('$cue ${_method.steps[_activeStep]}');
+  }
+
+  void _toggleTts() {
+    setState(() => _ttsEnabled = !_ttsEnabled);
+    if (_ttsEnabled && _started) {
+      _speakCurrentStep();
+    } else {
+      unawaited(_tts.stop());
+    }
+  }
+
+  void _toggleRunning() {
+    setState(() => _running = !_running);
+    if (_running) {
+      _speakCurrentStep();
+    } else {
+      unawaited(_tts.stop());
+    }
   }
 
   @override
@@ -110,10 +218,15 @@ class _KabatZinnPracticeScreenState extends State<KabatZinnPracticeScreen>
     final progress = (_method.duration.inSeconds == 0)
         ? 0.0
         : (elapsed / _method.duration.inSeconds).clamp(0.0, 1.0);
-    final activeStep = (progress * _method.steps.length).floor().clamp(
-      0,
-      _method.steps.length - 1,
-    );
+    final activeStep = _method.steps.isEmpty
+        ? 0
+        : _activeStep.clamp(0, _method.steps.length - 1).toInt();
+    final stepProgress = _stepDurations.isEmpty
+        ? 0.0
+        : (1 -
+                  (_stepRemainingSeconds /
+                      math.max(1, _stepDurations[activeStep])))
+              .clamp(0.0, 1.0);
 
     return Scaffold(
       appBar: AppBar(
@@ -158,62 +271,48 @@ class _KabatZinnPracticeScreenState extends State<KabatZinnPracticeScreen>
             if (!_started) ...[
               _KnowledgeCard(method: _method, onStart: _startPractice),
               const SizedBox(height: 20),
-            ],
-            _AnimatedPractice(
-              animation: _animation,
-              method: _method,
-              activeStep: activeStep,
-            ),
-            const SizedBox(height: 20),
-            SoftCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _formatTime(),
-                          style: Theme.of(context).textTheme.displayMedium
-                              ?.copyWith(fontWeight: FontWeight.w900),
+            ] else ...[
+              _AnimatedPractice(
+                animation: _animation,
+                method: _method,
+                activeStep: activeStep,
+              ),
+              const SizedBox(height: 20),
+              SoftCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _formatTime(),
+                            style: Theme.of(context).textTheme.displayMedium
+                                ?.copyWith(fontWeight: FontWeight.w900),
+                          ),
                         ),
-                      ),
-                      StatusPill(
-                        label: !_started
-                            ? 'SIAP'
-                            : _running
-                            ? 'BERJALAN'
-                            : 'JEDA',
-                        color: _started && _running
-                            ? AppTheme.olive
-                            : AppTheme.muted,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(999),
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 8,
-                      backgroundColor: const Color(0xFFE4E5E3),
-                      color: color,
+                        StatusPill(
+                          label: _running ? 'BERJALAN' : 'JEDA',
+                          color: _running ? AppTheme.olive : AppTheme.muted,
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (!_started)
-                    FilledButton.icon(
-                      onPressed: _startPractice,
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('Mulai'),
-                    )
-                  else
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 8,
+                        backgroundColor: const Color(0xFFE4E5E3),
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                     Row(
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed: () =>
-                                setState(() => _running = !_running),
+                            onPressed: _toggleRunning,
                             icon: Icon(
                               _running ? Icons.pause : Icons.play_arrow,
                             ),
@@ -230,12 +329,27 @@ class _KabatZinnPracticeScreenState extends State<KabatZinnPracticeScreen>
                         ),
                       ],
                     ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 18),
-            _StepsCard(steps: _method.steps, activeStep: activeStep),
-            const SizedBox(height: 18),
+              const SizedBox(height: 18),
+              _StepGuideCard(
+                steps: _method.steps,
+                activeStep: activeStep,
+                stepTime: _formatStepTime(),
+                stepProgress: stepProgress,
+                ttsEnabled: _ttsEnabled,
+                onPrevious: activeStep == 0
+                    ? null
+                    : () => _goToStep(activeStep - 1),
+                onNext: activeStep == _method.steps.length - 1
+                    ? null
+                    : () => _goToStep(activeStep + 1),
+                onReplay: _speakCurrentStep,
+                onToggleTts: _toggleTts,
+              ),
+              const SizedBox(height: 18),
+            ],
             _AlternativesCard(
               methods: _alternativesForSnapshot(widget.snapshot),
               selected: _method,
@@ -280,6 +394,7 @@ class _AnimatedPractice extends StatelessWidget {
                           value: pulse,
                           icon: method.icon,
                           kind: method.kind,
+                          activeStep: activeStep,
                         ),
                 ),
               ),
@@ -302,23 +417,29 @@ class _PersonPracticeFigure extends StatelessWidget {
     required this.value,
     required this.icon,
     required this.kind,
+    required this.activeStep,
   });
 
   final double value;
   final IconData icon;
   final _PracticeKind kind;
+  final int activeStep;
 
   @override
   Widget build(BuildContext context) {
     final sway = math.sin(value * math.pi * 2);
+    final stepTone = _stepTone(activeStep);
+    final stepPhase = activeStep % 4;
     final breathScale = 1 + value * 0.08;
     final walkOffset = kind == _PracticeKind.walking ? sway * 22 : 0.0;
-    final armLift = kind == _PracticeKind.movement ? 18 + value * 24 : 8.0;
+    final armLift = kind == _PracticeKind.movement
+        ? 18 + value * 24
+        : 8.0 + stepPhase * 5;
     final bodyColor = kind == _PracticeKind.lovingKindness
         ? const Color(0xFFB76E79)
         : kind == _PracticeKind.grounding
         ? const Color(0xFF24718E)
-        : AppTheme.olive;
+        : stepTone;
 
     return Transform.translate(
       offset: Offset(walkOffset, 0),
@@ -337,6 +458,7 @@ class _PersonPracticeFigure extends StatelessWidget {
               armLift: armLift,
               bodyColor: bodyColor,
               kind: kind,
+              activeStep: activeStep,
             ),
             child: Align(
               alignment: Alignment.topRight,
@@ -359,16 +481,19 @@ class _PersonPainter extends CustomPainter {
     required this.armLift,
     required this.bodyColor,
     required this.kind,
+    required this.activeStep,
   });
 
   final double pulse;
   final double armLift;
   final Color bodyColor;
   final _PracticeKind kind;
+  final int activeStep;
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
+    final stepPhase = activeStep % 4;
     final paint = Paint()
       ..color = bodyColor
       ..strokeCap = StrokeCap.round
@@ -379,16 +504,32 @@ class _PersonPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     canvas.drawCircle(center.translate(0, 52), 56, fill);
-    canvas.drawCircle(center.translate(0, -50), 24, Paint()..color = bodyColor);
-    canvas.drawLine(center.translate(0, -20), center.translate(0, 52), paint);
+    final headOffset = Offset(
+      stepPhase == 1
+          ? -3
+          : stepPhase == 2
+          ? 3
+          : 0,
+      0,
+    );
+    canvas.drawCircle(
+      center.translate(headOffset.dx, -50),
+      24,
+      Paint()..color = bodyColor,
+    );
     canvas.drawLine(
-      center.translate(0, 4),
-      center.translate(-42, -armLift),
+      center.translate(0, -20),
+      center.translate(stepPhase == 3 ? 4 : 0, 52),
       paint,
     );
     canvas.drawLine(
       center.translate(0, 4),
-      center.translate(42, -armLift),
+      center.translate(-42, -armLift - stepPhase * 2),
+      paint,
+    );
+    canvas.drawLine(
+      center.translate(0, 4),
+      center.translate(42, -armLift + stepPhase * 2),
       paint,
     );
 
@@ -406,6 +547,15 @@ class _PersonPainter extends CustomPainter {
       paint,
     );
 
+    final haloPaint = Paint()
+      ..color = bodyColor.withValues(alpha: 0.08 + pulse * 0.08)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(
+      center.translate((stepPhase - 1.5) * 18, -78 + stepPhase * 10),
+      18 + pulse * 8,
+      haloPaint,
+    );
+
     if (kind == _PracticeKind.breathing ||
         kind == _PracticeKind.breathing478 ||
         kind == _PracticeKind.grounding) {
@@ -418,6 +568,7 @@ class _PersonPainter extends CustomPainter {
 
     if (kind == _PracticeKind.journaling) {
       final notePaint = Paint()..color = Colors.white;
+      final lineCount = (activeStep + 1).clamp(1, 5);
       final rect = RRect.fromRectAndRadius(
         Rect.fromCenter(
           center: center.translate(54, 36),
@@ -427,16 +578,18 @@ class _PersonPainter extends CustomPainter {
         const Radius.circular(6),
       );
       canvas.drawRRect(rect, notePaint);
-      canvas.drawLine(
-        center.translate(40, 24),
-        center.translate(68, 24),
-        paint..strokeWidth = 3,
-      );
-      canvas.drawLine(
-        center.translate(40, 38),
-        center.translate(68, 38),
-        paint,
-      );
+      final noteStroke = Paint()
+        ..color = bodyColor
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = 3;
+      for (var i = 0; i < lineCount; i++) {
+        final y = 18 + i * 8.0;
+        canvas.drawLine(
+          center.translate(40, y),
+          center.translate(68 - (i.isOdd ? 8 : 0), y),
+          noteStroke,
+        );
+      }
     }
   }
 
@@ -445,7 +598,8 @@ class _PersonPainter extends CustomPainter {
     return oldDelegate.pulse != pulse ||
         oldDelegate.armLift != armLift ||
         oldDelegate.bodyColor != bodyColor ||
-        oldDelegate.kind != kind;
+        oldDelegate.kind != kind ||
+        oldDelegate.activeStep != activeStep;
   }
 }
 
@@ -545,50 +699,120 @@ class _BodyScanPainter extends CustomPainter {
   }
 }
 
-class _StepsCard extends StatelessWidget {
-  const _StepsCard({required this.steps, required this.activeStep});
+class _StepGuideCard extends StatelessWidget {
+  const _StepGuideCard({
+    required this.steps,
+    required this.activeStep,
+    required this.stepTime,
+    required this.stepProgress,
+    required this.ttsEnabled,
+    required this.onPrevious,
+    required this.onNext,
+    required this.onReplay,
+    required this.onToggleTts,
+  });
 
   final List<String> steps;
   final int activeStep;
+  final String stepTime;
+  final double stepProgress;
+  final bool ttsEnabled;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+  final VoidCallback onReplay;
+  final VoidCallback onToggleTts;
 
   @override
   Widget build(BuildContext context) {
+    final step = steps.isEmpty ? '' : steps[activeStep];
+
     return SoftCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Apa yang dilakukan',
-            style: Theme.of(context).textTheme.titleLarge,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Langkah ${activeStep + 1} dari ${steps.length}',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              IconButton.filledTonal(
+                tooltip: ttsEnabled ? 'Matikan suara' : 'Aktifkan suara',
+                onPressed: onToggleTts,
+                icon: Icon(
+                  ttsEnabled ? Icons.volume_up : Icons.volume_off_outlined,
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                tooltip: 'Ulangi suara',
+                onPressed: ttsEnabled ? onReplay : null,
+                icon: const Icon(Icons.record_voice_over_outlined),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
-          for (var index = 0; index < steps.length; index++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    radius: 13,
-                    backgroundColor: index == activeStep
-                        ? AppTheme.olive
-                        : AppTheme.mint,
-                    child: Text(
-                      '${index + 1}',
-                      style: TextStyle(
-                        color: index == activeStep
-                            ? Colors.white
-                            : AppTheme.olive,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text(steps[index])),
-                ],
-              ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.mint,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.line),
             ),
+            child: Text(
+              step,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(height: 1.45),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: stepProgress,
+                    minHeight: 8,
+                    backgroundColor: const Color(0xFFE4E5E3),
+                    color: AppTheme.olive,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                stepTime,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppTheme.olive,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onPrevious,
+                  icon: const Icon(Icons.chevron_left),
+                  label: const Text('Kembali'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: onNext,
+                  icon: const Icon(Icons.chevron_right),
+                  label: const Text('Lanjut'),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -639,7 +863,9 @@ class _AlternativesCard extends StatelessWidget {
 }
 
 class _EvaluationSheet extends StatelessWidget {
-  const _EvaluationSheet();
+  const _EvaluationSheet({required this.onSelected});
+
+  final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -667,7 +893,7 @@ class _EvaluationSheet extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () => onSelected(option),
                   child: Text(option),
                 ),
               ),
@@ -912,6 +1138,18 @@ int _intValue(dynamic value, int fallback) {
 String _textValue(dynamic value, String fallback) {
   final text = '${value ?? ''}'.trim();
   return text.isEmpty ? fallback : text;
+}
+
+List<int> _buildStepDurations(_PracticeMethod method) {
+  final count = math.max(1, method.steps.length);
+  final totalSeconds = math.max(count, method.duration.inSeconds);
+  final baseSeconds = totalSeconds ~/ count;
+  final extraSeconds = totalSeconds % count;
+
+  return List.generate(
+    count,
+    (index) => baseSeconds + (index < extraSeconds ? 1 : 0),
+  );
 }
 
 _PracticeMethod _methodFromTactic(Map<String, dynamic> tactic) {
@@ -1235,4 +1473,15 @@ Color _categoryColor(String category) {
     'hijau' => AppTheme.olive,
     _ => AppTheme.muted,
   };
+}
+
+Color _stepTone(int step) {
+  const tones = [
+    AppTheme.olive,
+    Color(0xFF24718E),
+    Color(0xFF8D6B32),
+    Color(0xFFB76E79),
+  ];
+
+  return tones[step % tones.length];
 }

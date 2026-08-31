@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -30,8 +29,6 @@ class _AnalysisDashboardScreenState extends State<AnalysisDashboardScreen> {
   int _selfReportLevel = 5;
   bool _running = false;
   bool _savingSelfReport = false;
-  bool _backgroundLoading = false;
-  Timer? _autoRefreshTimer;
   Map<String, dynamic>? _freshSnapshot;
 
   @override
@@ -39,15 +36,10 @@ class _AnalysisDashboardScreenState extends State<AnalysisDashboardScreen> {
     super.initState();
     _future = _load();
     analysisRefreshTick.addListener(_reload);
-    _autoRefreshTimer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) => _reload(background: true),
-    );
   }
 
   @override
   void dispose() {
-    _autoRefreshTimer?.cancel();
     analysisRefreshTick.removeListener(_reload);
     super.dispose();
   }
@@ -67,23 +59,8 @@ class _AnalysisDashboardScreenState extends State<AnalysisDashboardScreen> {
     );
   }
 
-  void _reload({bool background = false}) {
+  void _reload() {
     if (!mounted) return;
-    if (background) {
-      if (_backgroundLoading) return;
-      _backgroundLoading = true;
-      unawaited(
-        _load()
-            .then((bundle) {
-              if (!mounted) return;
-              setState(() => _future = Future.value(bundle));
-            })
-            .catchError((_) {})
-            .whenComplete(() => _backgroundLoading = false),
-      );
-      return;
-    }
-
     setState(() => _future = _load());
   }
 
@@ -853,6 +830,8 @@ class _AnalysisGraphCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final data = snapshot ?? <String, dynamic>{};
     final period = '${data['period_type'] ?? 'daily'}';
+    final finalScore = _numValue(data['final_burnout_risk_score']);
+    final finalCategory = '${data['category'] ?? ''}';
     final activities = _activityBreakdown(
       data,
     ).where((item) => '${item['status'] ?? ''}' != 'cancelled').toList();
@@ -886,7 +865,7 @@ class _AnalysisGraphCard extends StatelessWidget {
               child: SizedBox(
                 width: math.max(
                   MediaQuery.sizeOf(context).width - 48,
-                  activities.length * 58.0,
+                  activities.length * 76.0,
                 ),
                 height: 190,
                 child: CustomPaint(
@@ -895,6 +874,25 @@ class _AnalysisGraphCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
+            if (data['final_burnout_risk_score'] != null ||
+                finalCategory.isNotEmpty) ...[
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  StatusPill(
+                    label: 'Keputusan akhir: ${_categoryLabel(finalCategory)}',
+                    color: _categoryColor(finalCategory),
+                  ),
+                  if (data['final_burnout_risk_score'] != null)
+                    StatusPill(
+                      label: 'Skor ${finalScore.toStringAsFixed(0)}/100',
+                      color: _scoreColor(finalScore),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -902,7 +900,7 @@ class _AnalysisGraphCard extends StatelessWidget {
                 for (var index = 0; index < activities.length; index++)
                   StatusPill(
                     label:
-                        '${index + 1}. ${_shortActivityTitle(activities[index]['title'])}',
+                        '${index + 1}. ${_shortActivityTitle(activities[index]['title'])} - ${_categoryLabel('${activities[index]['condition']}')}',
                     color: _categoryColor('${activities[index]['condition']}'),
                   ),
               ],
@@ -1081,12 +1079,19 @@ class _RiskChartPainter extends CustomPainter {
     final axisPaint = Paint()
       ..color = AppTheme.line
       ..strokeWidth = 1;
+    final linePaint = Paint()
+      ..color = AppTheme.olive
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
     final labelPainter = TextPainter(textDirection: ui.TextDirection.ltr);
     final chartTop = 8.0;
     final chartBottom = size.height - 26;
     final chartHeight = chartBottom - chartTop;
-    final slotWidth = size.width / math.max(points.length, 1);
-    final barWidth = math.min(28.0, slotWidth * 0.48);
+    final leftInset = points.length == 1 ? size.width / 2 : 18.0;
+    final rightInset = points.length == 1 ? size.width / 2 : 18.0;
+    final usableWidth = math.max(1.0, size.width - leftInset - rightInset);
+    final offsets = <Offset>[];
 
     for (final threshold in [40.0, 70.0]) {
       final y = chartBottom - (threshold / 100 * chartHeight);
@@ -1098,14 +1103,34 @@ class _RiskChartPainter extends CustomPainter {
       final score = _numValue(
         point['final_burnout_risk_score'] ?? point['score'],
       );
-      final x = slotWidth * i + (slotWidth - barWidth) / 2;
-      final barHeight = (score.clamp(0, 100) / 100) * chartHeight;
-      final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(x, chartBottom - barHeight, barWidth, barHeight),
-        const Radius.circular(8),
+      final x = points.length == 1
+          ? size.width / 2
+          : leftInset + (usableWidth / (points.length - 1)) * i;
+      final y = chartBottom - (score.clamp(0, 100) / 100) * chartHeight;
+      offsets.add(Offset(x, y));
+    }
+
+    if (offsets.length > 1) {
+      final path = Path()..moveTo(offsets.first.dx, offsets.first.dy);
+      for (final offset in offsets.skip(1)) {
+        path.lineTo(offset.dx, offset.dy);
+      }
+      canvas.drawPath(path, linePaint);
+    }
+
+    for (var i = 0; i < points.length; i++) {
+      final point = points[i];
+      final score = _numValue(
+        point['final_burnout_risk_score'] ?? point['score'],
       );
-      final paint = Paint()..color = _scoreColor(score);
-      canvas.drawRRect(rect, paint);
+      final offset = offsets[i];
+      final fillPaint = Paint()..color = _scoreColor(score);
+      final strokePaint = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3;
+      canvas.drawCircle(offset, 6, fillPaint);
+      canvas.drawCircle(offset, 6, strokePaint);
 
       labelPainter.text = TextSpan(
         text: DateFormat(
@@ -1113,13 +1138,10 @@ class _RiskChartPainter extends CustomPainter {
         ).format(_parseDate(point['period_start'] ?? point['date'])),
         style: const TextStyle(color: AppTheme.muted, fontSize: 10),
       );
-      labelPainter.layout(maxWidth: slotWidth);
+      labelPainter.layout();
       labelPainter.paint(
         canvas,
-        Offset(
-          slotWidth * i + (slotWidth - labelPainter.width) / 2,
-          chartBottom + 8,
-        ),
+        Offset(offset.dx - labelPainter.width / 2, chartBottom + 8),
       );
     }
   }
@@ -1140,12 +1162,19 @@ class _ActivityRiskChartPainter extends CustomPainter {
     final axisPaint = Paint()
       ..color = AppTheme.line
       ..strokeWidth = 1;
+    final linePaint = Paint()
+      ..color = AppTheme.olive
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
     final labelPainter = TextPainter(textDirection: ui.TextDirection.ltr);
     final chartTop = 8.0;
     final chartBottom = size.height - 32;
     final chartHeight = chartBottom - chartTop;
-    final slotWidth = size.width / math.max(points.length, 1);
-    final barWidth = math.min(30.0, slotWidth * 0.48);
+    final leftInset = points.length == 1 ? size.width / 2 : 22.0;
+    final rightInset = points.length == 1 ? size.width / 2 : 22.0;
+    final usableWidth = math.max(1.0, size.width - leftInset - rightInset);
+    final offsets = <Offset>[];
 
     for (final threshold in [40.0, 70.0]) {
       final y = chartBottom - (threshold / 100 * chartHeight);
@@ -1155,15 +1184,32 @@ class _ActivityRiskChartPainter extends CustomPainter {
     for (var i = 0; i < points.length; i++) {
       final point = points[i];
       final score = _numValue(point['score']);
+      final x = points.length == 1
+          ? size.width / 2
+          : leftInset + (usableWidth / (points.length - 1)) * i;
+      final y = chartBottom - (score.clamp(0, 100) / 100) * chartHeight;
+      offsets.add(Offset(x, y));
+    }
+
+    if (offsets.length > 1) {
+      final path = Path()..moveTo(offsets.first.dx, offsets.first.dy);
+      for (final offset in offsets.skip(1)) {
+        path.lineTo(offset.dx, offset.dy);
+      }
+      canvas.drawPath(path, linePaint);
+    }
+
+    for (var i = 0; i < points.length; i++) {
+      final point = points[i];
       final condition = '${point['condition'] ?? ''}';
-      final x = slotWidth * i + (slotWidth - barWidth) / 2;
-      final barHeight = (score.clamp(0, 100) / 100) * chartHeight;
-      final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(x, chartBottom - barHeight, barWidth, barHeight),
-        const Radius.circular(8),
-      );
-      final paint = Paint()..color = _categoryColor(condition);
-      canvas.drawRRect(rect, paint);
+      final offset = offsets[i];
+      final fillPaint = Paint()..color = _categoryColor(condition);
+      final strokePaint = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3;
+      canvas.drawCircle(offset, 7, fillPaint);
+      canvas.drawCircle(offset, 7, strokePaint);
 
       labelPainter.text = TextSpan(
         text: '${i + 1}',
@@ -1173,13 +1219,10 @@ class _ActivityRiskChartPainter extends CustomPainter {
           fontWeight: FontWeight.w700,
         ),
       );
-      labelPainter.layout(maxWidth: slotWidth);
+      labelPainter.layout();
       labelPainter.paint(
         canvas,
-        Offset(
-          slotWidth * i + (slotWidth - labelPainter.width) / 2,
-          chartBottom + 10,
-        ),
+        Offset(offset.dx - labelPainter.width / 2, chartBottom + 10),
       );
     }
   }

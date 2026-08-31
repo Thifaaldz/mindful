@@ -5,7 +5,8 @@
     <application
         android:label="mindfuledu"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@drawable/ic_launcher_leaf"
+        android:roundIcon="@drawable/ic_launcher_leaf">
         <activity
             android:name=".MainActivity"
             android:exported="true"

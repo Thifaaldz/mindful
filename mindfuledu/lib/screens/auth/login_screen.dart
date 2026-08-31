@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/api_client.dart';
 import '../../core/google_auth_service.dart';
 import '../../core/session.dart';
-import '../../widgets/mindful_avatar.dart';
+import '../../widgets/app_chrome.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -102,7 +102,9 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const MindfulAvatar(assetName: 'avatar_home.png', size: 190),
+                  const Center(
+                    child: BrandMark(size: 132, radius: 32, iconSize: 70),
+                  ),
                   const SizedBox(height: 24),
                   Text(
                     'MindfulEdu',

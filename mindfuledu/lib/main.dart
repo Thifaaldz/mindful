@@ -9,6 +9,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/auth/profile_completion_screen.dart';
 import 'screens/student/student_shell.dart';
 import 'screens/teacher/teacher_shell.dart';
+import 'widgets/app_chrome.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -74,26 +75,7 @@ class SplashScreen extends StatelessWidget {
           child: Column(
             children: [
               const Spacer(),
-              Container(
-                width: 92,
-                height: 92,
-                decoration: BoxDecoration(
-                  color: AppTheme.mint,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.olive.withValues(alpha: 0.16),
-                      blurRadius: 28,
-                      offset: const Offset(0, 14),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.eco_outlined,
-                  color: AppTheme.olive,
-                  size: 46,
-                ),
-              ),
+              const BrandMark(size: 92, radius: 24, iconSize: 46),
               const SizedBox(height: 24),
               Text(
                 'MindfulEdu',
