@@ -101,6 +101,10 @@ class JournalAnalysisService
             'suggestion' => $analysis['suggestion'] ?? self::SUGGESTIONS['netral'],
             'crisis_flag' => (bool) ($analysis['crisis_flag'] ?? false) || $local['crisis_flag'],
             'burnout_dimensions' => $dimensions,
+            'practice_code' => $analysis['practice_code'] ?? $local['practice_code'] ?? null,
+            'practice_title' => $analysis['practice_title'] ?? $local['practice_title'] ?? null,
+            'recommended_movement' => $analysis['recommended_movement'] ?? $local['recommended_movement'] ?? null,
+            'why_this_tactic' => $analysis['why_this_tactic'] ?? $local['why_this_tactic'] ?? null,
             'source' => $analysis['source'] ?? 'fastapi',
             'raw_response' => $analysis['raw_response'] ?? null,
         ];

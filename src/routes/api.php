@@ -4,7 +4,9 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\BurnoutAnalysisController;
 use App\Http\Controllers\Api\BurnoutSelfReportController;
+use App\Http\Controllers\Api\ClassroomActivityController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\ParentDashboardController;
 use App\Http\Controllers\Api\ReminderPreferenceController;
 use App\Http\Controllers\Api\ToolkitController;
 use Illuminate\Support\Facades\Route;
@@ -15,8 +17,10 @@ Route::post('/auth/google', [AuthController::class, 'google']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::put('/me/profile', [AuthController::class, 'updateProfile']);
+    Route::post('/me/avatar', [AuthController::class, 'updateAvatar']);
     Route::get('/reminder-preference', [ReminderPreferenceController::class, 'show']);
     Route::put('/reminder-preference', [ReminderPreferenceController::class, 'update']);
     Route::apiResource('activities', ActivityController::class)
@@ -26,6 +30,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/activities/{activity}/cancel', [ActivityController::class, 'cancel']);
     Route::post('/activities/{activity}/duplicate', [ActivityController::class, 'duplicate']);
     Route::get('/activities/{activity}/ledger', [ActivityController::class, 'ledger']);
+    Route::get('/classroom/activities/available', [ClassroomActivityController::class, 'available']);
+    Route::post('/classroom/activities/{activity}/join', [ClassroomActivityController::class, 'join']);
     Route::get('/burnout-analyses', [BurnoutAnalysisController::class, 'index']);
     Route::get('/burnout-analyses/overview', [BurnoutAnalysisController::class, 'overview']);
     Route::post('/burnout-analyses', [BurnoutAnalysisController::class, 'store']);
@@ -34,8 +40,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/toolkit/tactics/{tactic}/bookmark', [ToolkitController::class, 'toggleBookmark']);
 
     Route::middleware('role:teacher')->group(function () {
-        Route::get('/dashboard', [DashboardController::class, 'index']);
+        Route::get('/teacher/classroom-activities/{activity}/observations', [ClassroomActivityController::class, 'observations']);
         Route::post('/burnout-self-reports', [BurnoutSelfReportController::class, 'store']);
+    });
 
+    Route::middleware('role:parent')->group(function () {
+        Route::get('/parent/dashboard', [ParentDashboardController::class, 'index']);
+        Route::post('/parent/children', [ParentDashboardController::class, 'linkChild']);
     });
 });

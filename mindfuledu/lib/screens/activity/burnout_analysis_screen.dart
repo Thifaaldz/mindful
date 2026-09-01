@@ -154,12 +154,22 @@ class _AnalysisResult extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.secondary;
     final recommendation = _jsonMap(snapshot['recommendation_summary']);
     final category = '${snapshot['category'] ?? 'belum cukup'}';
     final sufficient = snapshot['data_sufficiency'] == true;
     final factors = (recommendation['dominant_factors'] as List? ?? [])
         .map((item) => _factorLabel('$item'))
         .toList();
+    final review = '${recommendation['analysis_review'] ?? ''}'.trim();
+    final movement = '${recommendation['recommended_movement'] ?? ''}'.trim();
+    final reason = '${recommendation['why_this_tactic'] ?? ''}'.trim();
+    final practiceTitle = '${recommendation['practice_title'] ?? ''}'.trim();
+    final reductionSteps =
+        (recommendation['risk_reduction_steps'] as List? ?? [])
+            .map((item) => '$item'.trim())
+            .where((item) => item.isNotEmpty)
+            .toList();
     final canStart = const {'hijau', 'kuning', 'merah'}.contains(category);
     void openPractice() {
       Navigator.of(context).push(
@@ -188,31 +198,81 @@ class _AnalysisResult extends StatelessWidget {
                     ? '${recommendation['action'] ?? ''}'
                     : 'Lengkapi check-out dan jurnal pasca aktivitas agar rekomendasi bisa mengikuti kondisi Anda.',
               ),
+              if (review.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _InsightLine(icon: Icons.psychology_outlined, text: review),
+              ],
+              if (reason.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                _InsightLine(icon: Icons.lightbulb_outline, text: reason),
+              ],
+              if (reductionSteps.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                ...reductionSteps.map(
+                  (step) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: _InsightLine(
+                      icon: Icons.check_circle_outline,
+                      text: step,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AppTheme.mint,
+                  color: primary.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppTheme.line),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.self_improvement, color: AppTheme.olive),
+                    Icon(Icons.self_improvement, color: primary),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text('${recommendation['practice'] ?? ''}'),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (practiceTitle.isNotEmpty) ...[
+                            Text(
+                              practiceTitle,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 4),
+                          ],
+                          Text('${recommendation['practice'] ?? ''}'),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
+              if (movement.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                _InsightLine(icon: Icons.accessibility_new, text: movement),
+              ],
               const SizedBox(height: 14),
-              FilledButton.icon(
-                onPressed: canStart ? openPractice : null,
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('Mulai Latihan'),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: canStart ? openPractice : null,
+                      icon: const Icon(Icons.menu_book_outlined),
+                      label: const Text('Info Teknik'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: canStart ? openPractice : null,
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Mulai Latihan'),
+                    ),
+                  ),
+                ],
               ),
               if (factors.isNotEmpty) ...[
                 const SizedBox(height: 14),
@@ -240,18 +300,42 @@ class _GuidanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SoftCard(
+    final primary = Theme.of(context).colorScheme.secondary;
+
+    return SoftCard(
       child: Row(
         children: [
-          Icon(Icons.fact_check_outlined, color: AppTheme.olive),
-          SizedBox(width: 12),
-          Expanded(
+          Icon(Icons.fact_check_outlined, color: primary),
+          const SizedBox(width: 12),
+          const Expanded(
             child: Text(
               'Lengkapi check-in, check-out, dan jurnal pasca aktivitas agar rekomendasi bisa mengikuti kondisi Anda.',
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _InsightLine extends StatelessWidget {
+  const _InsightLine({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    if (text.isEmpty) return const SizedBox.shrink();
+    final primary = Theme.of(context).colorScheme.secondary;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: primary),
+        const SizedBox(width: 8),
+        Expanded(child: Text(text)),
+      ],
     );
   }
 }

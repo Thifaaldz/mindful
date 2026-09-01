@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Activity;
+use App\Models\SchoolClass;
 use App\Services\BurnoutAnalysisService;
 use App\Services\JournalAnalysisService;
 use Illuminate\Http\Request;
@@ -28,8 +29,7 @@ class ActivityController extends Controller
     public function __construct(
         private readonly JournalAnalysisService $journalAnalysisService,
         private readonly BurnoutAnalysisService $burnoutAnalysisService,
-    )
-    {
+    ) {
     }
 
     public function index(Request $request)
@@ -37,6 +37,11 @@ class ActivityController extends Controller
         $date = Carbon::parse($request->query('date', now()->toDateString()));
 
         $activities = $request->user()->activities()
+            ->with([
+                'teacherActivity:id,user_id,title,activity_type,checkin_at,checkout_at',
+                'teacherActivity.owner:id,name,school',
+                'schoolClass:id,name,grade,school',
+            ])
             ->whereDate('activity_date', $date)
             ->orderBy('start_at')
             ->get();
@@ -44,7 +49,7 @@ class ActivityController extends Controller
         return response()->json([
             'date' => $date->toDateString(),
             'summary' => $this->summary($activities),
-            'activities' => $activities,
+            'activities' => $activities->map(fn (Activity $activity) => $this->activityPayload($activity))->values(),
             'latest_analysis' => $this->burnoutAnalysisService->preview($request->user(), 'daily', $date),
         ]);
     }
@@ -58,6 +63,8 @@ class ActivityController extends Controller
         }
 
         $data = $validator->validated();
+        $schoolClass = $this->resolveSchoolClassForActivity($request, $data);
+        $data['school_class_id'] = $schoolClass?->id;
         $activityDate = $data['activity_date'] ?? now()->toDateString();
         $repeatType = $data['repeat_type'] ?? 'none';
         $dates = $this->activityDates($activityDate, $repeatType, $data['repeat_until'] ?? null);
@@ -84,6 +91,9 @@ class ActivityController extends Controller
             $activity = $request->user()->activities()->create([
                 'title' => $data['title'],
                 'category' => $data['category'] ?? null,
+                'activity_type' => $this->activityTypeFor($request, $data),
+                'activity_kind' => $data['activity_kind'] ?? null,
+                'school_class_id' => $schoolClass?->id,
                 'activity_date' => $dateText,
                 'start_at' => $startAt,
                 'end_at' => $endAt,
@@ -97,6 +107,7 @@ class ActivityController extends Controller
                 'overlap_warning' => $dateOverlap,
                 'source' => 'todo_list',
                 'repeat_type' => $repeatType,
+                'school_class_id' => $schoolClass?->id,
             ]);
             $activities->push($activity);
         }
@@ -133,6 +144,8 @@ class ActivityController extends Controller
         }
 
         $data = $validator->validated();
+        $schoolClass = $this->resolveSchoolClassForActivity($request, $data);
+        $data['school_class_id'] = $schoolClass?->id;
         $activityDate = $data['activity_date'] ?? $activity->activity_date->toDateString();
         [$startAt, $endAt] = $this->timestamps($activityDate, $data['start_time'] ?? null, $data['end_time'] ?? null);
 
@@ -145,6 +158,9 @@ class ActivityController extends Controller
         $activity->update([
             'title' => $data['title'],
             'category' => $data['category'] ?? null,
+            'activity_type' => $this->activityTypeFor($request, $data),
+            'activity_kind' => $data['activity_kind'] ?? null,
+            'school_class_id' => $schoolClass?->id,
             'activity_date' => $activityDate,
             'start_at' => $startAt,
             'end_at' => $endAt,
@@ -169,6 +185,7 @@ class ActivityController extends Controller
         $this->authorizeOwner($request, $activity);
         abort_if($activity->status === Activity::STATUS_CANCELLED, 422, 'Activity sudah dibatalkan.');
         abort_if($activity->checkin_at !== null, 422, 'Check-in sudah tercatat.');
+        $this->authorizeClassroomStudentCheckIn($activity);
 
         $validator = Validator::make($request->all(), [
             'mood' => ['nullable', 'string', Rule::in(self::CHECKIN_MOODS)],
@@ -203,6 +220,7 @@ class ActivityController extends Controller
         abort_if($activity->status === Activity::STATUS_CANCELLED, 422, 'Activity sudah dibatalkan.');
         abort_if($activity->checkin_at === null, 422, 'Check-in harus dilakukan sebelum check-out.');
         abort_if($activity->checkout_at !== null, 422, 'Check-out sudah tercatat.');
+        $this->authorizeClassroomStudentCheckOut($activity);
 
         $validator = Validator::make($request->all(), [
             'mood' => ['nullable', 'string', Rule::in(self::CHECKIN_MOODS)],
@@ -296,6 +314,10 @@ class ActivityController extends Controller
         $copy = $request->user()->activities()->create([
             'title' => $activity->title,
             'category' => $activity->category,
+            'activity_type' => $activity->activity_type,
+            'activity_kind' => $activity->activity_kind,
+            'school_class_id' => $activity->school_class_id,
+            'teacher_activity_id' => $activity->teacher_activity_id,
             'activity_date' => $date,
             'start_at' => $startAt,
             'end_at' => $endAt,
@@ -324,6 +346,10 @@ class ActivityController extends Controller
             'start_time' => ['nullable', 'date_format:H:i'],
             'end_time' => ['nullable', 'date_format:H:i'],
             'category' => ['nullable', 'string', 'max:160'],
+            'activity_kind' => ['nullable', 'string', 'max:80'],
+            'activity_type' => ['nullable', Rule::in([Activity::TYPE_PERSONAL, Activity::TYPE_CLASSROOM])],
+            'school_class_id' => ['nullable', 'integer', 'exists:classes,id'],
+            'school_class_name' => ['nullable', 'string', 'max:80'],
             'repeat_type' => ['nullable', Rule::in(['none', 'weekly', 'monthly'])],
             'repeat_until' => ['nullable', 'date', 'after_or_equal:activity_date'],
         ]);
@@ -405,6 +431,8 @@ class ActivityController extends Controller
             ->whereDate('activity_date', $date)
             ->where('title', $data['title'])
             ->where('category', $data['category'] ?? null)
+            ->where('activity_kind', $data['activity_kind'] ?? null)
+            ->where('school_class_id', $data['school_class_id'] ?? null)
             ->where('status', '!=', Activity::STATUS_CANCELLED)
             ->when(
                 $startAt,
@@ -422,6 +450,134 @@ class ActivityController extends Controller
     private function authorizeOwner(Request $request, Activity $activity): void
     {
         abort_if($activity->user_id !== $request->user()->id, 403);
+    }
+
+    private function resolveSchoolClassForActivity(Request $request, array $data): ?SchoolClass
+    {
+        $user = $request->user();
+        $kind = strtolower((string) ($data['activity_kind'] ?? ''));
+        $activityType = $data['activity_type'] ?? null;
+        $className = trim((string) ($data['school_class_name'] ?? ''));
+        $classId = $data['school_class_id'] ?? null;
+        $isTeaching = $activityType === Activity::TYPE_CLASSROOM
+            || str_contains($kind, 'mengajar')
+            || str_contains($kind, 'teaching')
+            || $className !== ''
+            || $classId !== null;
+
+        if (! $isTeaching) {
+            return null;
+        }
+
+        abort_unless($user->isTeacher(), 403, 'Hanya guru yang dapat membuat activity kelas.');
+        abort_if(blank($user->school), 422, 'Sekolah guru wajib diisi sebelum membuat activity kelas.');
+
+        if ($classId) {
+            $schoolClass = SchoolClass::findOrFail($classId);
+            abort_if(
+                filled($schoolClass->school) && strcasecmp($schoolClass->school, $user->school) !== 0,
+                422,
+                'Kelas harus berada di sekolah yang sama dengan guru.'
+            );
+        } elseif ($className !== '') {
+            $schoolClass = SchoolClass::firstOrCreate(
+                ['name' => strtoupper($className), 'school' => $user->school],
+                ['grade' => $this->gradeFromClassName($className)]
+            );
+        } else {
+            return null;
+        }
+
+        $schoolClass->forceFill(['school' => $schoolClass->school ?: $user->school])->save();
+        $user->teachingClasses()->syncWithoutDetaching([$schoolClass->id]);
+
+        return $schoolClass;
+    }
+
+    private function activityTypeFor(Request $request, array $data): string
+    {
+        if (($data['activity_type'] ?? null) === Activity::TYPE_CLASSROOM) {
+            abort_unless($request->user()->isTeacher(), 403, 'Hanya guru yang dapat membuat activity kelas.');
+
+            return Activity::TYPE_CLASSROOM;
+        }
+
+        if (
+            $request->user()->isTeacher()
+            && (
+                str_contains(strtolower((string) ($data['activity_kind'] ?? '')), 'mengajar')
+                || str_contains(strtolower((string) ($data['activity_kind'] ?? '')), 'teaching')
+                || filled($data['school_class_name'] ?? null)
+                || filled($data['school_class_id'] ?? null)
+            )
+        ) {
+            return Activity::TYPE_CLASSROOM;
+        }
+
+        return Activity::TYPE_PERSONAL;
+    }
+
+    private function authorizeClassroomStudentCheckIn(Activity $activity): void
+    {
+        if (! $activity->teacher_activity_id) {
+            return;
+        }
+
+        $teacherActivity = $activity->teacherActivity()->first();
+        abort_if(! $teacherActivity || $teacherActivity->checkin_at === null, 422, 'Siswa belum bisa check-in sebelum guru melakukan check-in.');
+    }
+
+    private function authorizeClassroomStudentCheckOut(Activity $activity): void
+    {
+        if (! $activity->teacher_activity_id) {
+            return;
+        }
+
+        $teacherActivity = $activity->teacherActivity()->first();
+        abort_if(! $teacherActivity || $teacherActivity->checkout_at === null, 422, 'Siswa belum bisa check-out sebelum guru melakukan check-out.');
+    }
+
+    private function activityPayload(Activity $activity): array
+    {
+        return [
+            ...$activity->toArray(),
+            'classroom_gate' => $this->classroomGatePayload($activity),
+            'recommended_tactic' => filled($activity->checkout_fact) || filled($activity->checkout_feeling)
+                ? $this->burnoutAnalysisService->recommendedTacticForJournalActivity($activity)
+                : null,
+        ];
+    }
+
+    private function classroomGatePayload(Activity $activity): ?array
+    {
+        if (! $activity->teacher_activity_id) {
+            return null;
+        }
+
+        $teacherActivity = $activity->relationLoaded('teacherActivity')
+            ? $activity->teacherActivity
+            : $activity->teacherActivity()->with('owner:id,name,school')->first();
+
+        return [
+            'teacher_activity_id' => $activity->teacher_activity_id,
+            'teacher_checkin_available' => $teacherActivity?->checkin_at !== null,
+            'teacher_checkout_available' => $teacherActivity?->checkout_at !== null,
+            'can_student_check_in' => $teacherActivity?->checkin_at !== null,
+            'can_student_check_out' => $teacherActivity?->checkout_at !== null,
+            'message' => match (true) {
+                $teacherActivity === null => 'Activity guru tidak ditemukan.',
+                $teacherActivity->checkin_at === null => 'Menunggu guru melakukan check-in.',
+                $teacherActivity->checkout_at === null => 'Menunggu guru melakukan check-out.',
+                default => 'Activity guru sudah lengkap.',
+            },
+        ];
+    }
+
+    private function gradeFromClassName(string $className): ?string
+    {
+        preg_match('/\d+/', $className, $matches);
+
+        return $matches[0] ?? null;
     }
 
     private function summary($activities): array

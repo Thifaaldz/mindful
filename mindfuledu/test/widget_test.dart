@@ -24,7 +24,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('MindfulEdu'), findsOneWidget);
-    expect(find.text('Belum punya akun? Daftar'), findsOneWidget);
+    expect(find.text('Masuk Guru'), findsWidgets);
+    expect(find.text('Belum punya akun? Daftar Guru'), findsOneWidget);
   });
 }

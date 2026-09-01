@@ -10,17 +10,19 @@ uses(RefreshDatabase::class);
 beforeEach(function () {
     Role::create(['name' => 'teacher']);
     Role::create(['name' => 'student']);
+    Role::create(['name' => 'parent']);
 });
 
-test('email registration can start with account credentials then complete profile later', function () {
+test('email registration starts from selected access role then completes profile later', function () {
     $response = $this->postJson('/api/register', [
         'email' => 'baru@mindfuledu.test',
         'password' => 'password123',
         'password_confirmation' => 'password123',
+        'role' => 'teacher',
     ])
         ->assertCreated()
         ->assertJsonPath('user.email', 'baru@mindfuledu.test')
-        ->assertJsonPath('user.role', null)
+        ->assertJsonPath('user.role', 'teacher')
         ->assertJsonPath('user.profile_completed', false);
 
     $this->withToken($response->json('token'))
@@ -53,11 +55,12 @@ test('google login creates account from verified id token', function () {
 
     $this->postJson('/api/auth/google', [
         'id_token' => 'valid-google-id-token',
+        'role' => 'student',
     ])
         ->assertOk()
         ->assertJsonPath('user.email', 'google@mindfuledu.test')
         ->assertJsonPath('user.name', 'Google User')
-        ->assertJsonPath('user.role', null)
+        ->assertJsonPath('user.role', 'student')
         ->assertJsonPath('user.profile_completed', false)
         ->assertJsonPath('user.avatar_url', 'https://lh3.googleusercontent.com/avatar.png')
         ->assertJsonStructure(['token']);

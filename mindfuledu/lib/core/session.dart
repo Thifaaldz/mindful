@@ -26,6 +26,7 @@ class Session extends ChangeNotifier {
   String? get role => user?['role'] as String?;
   bool get isTeacher => role == 'teacher';
   bool get isStudent => role == 'student';
+  bool get isParent => role == 'parent';
   bool get isAuthenticated => token != null && user != null;
   bool get needsProfileCompletion =>
       isAuthenticated && user?['profile_completed'] != true;
@@ -69,11 +70,12 @@ class Session extends ChangeNotifier {
   Future<void> login(
     String email,
     String password, {
+    required String role,
     bool rememberDevice = false,
   }) async {
     final response = await ApiClient.instance.post(
       '/login',
-      data: {'email': email, 'password': password},
+      data: {'email': email, 'password': password, 'role': role},
     );
     await _persist(
       response.data as Map<String, dynamic>,
@@ -88,6 +90,8 @@ class Session extends ChangeNotifier {
     String? name,
     String? role,
     String? school,
+    String? className,
+    String? studentVerificationCode,
     bool rememberDevice = false,
   }) async {
     final response = await ApiClient.instance.post(
@@ -99,6 +103,8 @@ class Session extends ChangeNotifier {
         'password_confirmation': passwordConfirmation,
         'role': role,
         'school': school,
+        'class_name': className,
+        'student_verification_code': studentVerificationCode,
       },
     );
     await _persist(
@@ -109,11 +115,12 @@ class Session extends ChangeNotifier {
 
   Future<void> loginWithGoogleIdToken(
     String idToken, {
+    required String role,
     bool rememberDevice = false,
   }) async {
     final response = await ApiClient.instance.post(
       '/auth/google',
-      data: {'id_token': idToken},
+      data: {'id_token': idToken, 'role': role},
     );
     await _persist(
       response.data as Map<String, dynamic>,
@@ -125,10 +132,18 @@ class Session extends ChangeNotifier {
     required String name,
     required String role,
     String? school,
+    String? className,
+    String? studentVerificationCode,
   }) async {
     final response = await ApiClient.instance.put(
       '/me/profile',
-      data: {'name': name, 'role': role, 'school': school},
+      data: {
+        'name': name,
+        'role': role,
+        'school': school,
+        'class_name': className,
+        'student_verification_code': studentVerificationCode,
+      },
     );
     user =
         (response.data as Map<String, dynamic>)['user'] as Map<String, dynamic>;
@@ -136,7 +151,50 @@ class Session extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> quickLogin() async {
+  Future<void> updateProfile({
+    required String name,
+    required String school,
+    String? className,
+  }) async {
+    final currentRole = role;
+    if (currentRole == null) {
+      throw ApiException('Role akun tidak ditemukan');
+    }
+
+    final response = await ApiClient.instance.put(
+      '/me/profile',
+      data: {
+        'name': name,
+        'role': currentRole,
+        'school': school,
+        'class_name': className,
+      },
+    );
+    user =
+        (response.data as Map<String, dynamic>)['user'] as Map<String, dynamic>;
+    await _saveAccountMetadata();
+    notifyListeners();
+  }
+
+  Future<void> updateAvatar(String imagePath) async {
+    final response = await ApiClient.instance.postMultipart(
+      '/me/avatar',
+      fields: const {},
+      fileField: 'avatar',
+      filePath: imagePath,
+    );
+    user =
+        (response.data as Map<String, dynamic>)['user'] as Map<String, dynamic>;
+    await _saveAccountMetadata();
+    notifyListeners();
+  }
+
+  Future<void> quickLogin({required String role}) async {
+    final savedRole = savedAccount?['role'] as String?;
+    if (savedRole != null && savedRole != role) {
+      throw ApiException('Akun tersimpan bukan untuk akses ini');
+    }
+
     final supported =
         await _localAuth.isDeviceSupported() ||
         await _localAuth.canCheckBiometrics;
@@ -165,6 +223,15 @@ class Session extends ChangeNotifier {
     }
 
     await _restoreStoredToken(storedToken, clearOnFailure: true);
+
+    if (this.role != role) {
+      await _clearSavedSession();
+      token = null;
+      user = null;
+      ApiClient.instance.setToken(null);
+      throw ApiException('Akun tersimpan bukan untuk akses ini');
+    }
+
     notifyListeners();
   }
 
@@ -242,6 +309,7 @@ class Session extends ChangeNotifier {
       'name': user?['name'],
       'email': user?['email'],
       'avatar_url': user?['avatar_url'],
+      'role': user?['role'],
     };
 
     await _storage.write(

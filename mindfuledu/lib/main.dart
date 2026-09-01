@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
+import 'core/account_role.dart';
 import 'core/app_theme.dart';
 import 'core/reminder_service.dart';
 import 'core/session.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/profile_completion_screen.dart';
+import 'screens/parent/parent_shell.dart';
 import 'screens/student/student_shell.dart';
 import 'screens/teacher/teacher_shell.dart';
 import 'widgets/app_chrome.dart';
@@ -40,11 +42,13 @@ class MindfulEduApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => Session()..bootstrap(),
-      child: MaterialApp(
-        title: 'MindfulEdu',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        home: const _RootGate(),
+      child: Consumer<Session>(
+        builder: (context, session, _) => MaterialApp(
+          title: 'MindfulEdu',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.forRole(AccountRole.byId(session.role)),
+          home: const _RootGate(),
+        ),
       ),
     );
   }
@@ -71,6 +75,10 @@ class _RootGate extends StatelessWidget {
 
     if (session.isTeacher) {
       return const TeacherShell();
+    }
+
+    if (session.isParent) {
+      return const ParentShell();
     }
 
     return const StudentShell();

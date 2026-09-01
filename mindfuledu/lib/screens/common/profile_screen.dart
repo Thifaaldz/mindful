@@ -1,19 +1,82 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/account_role.dart';
+import '../../core/api_client.dart';
 import '../../core/app_theme.dart';
 import '../../core/session.dart';
 import '../../widgets/app_chrome.dart';
 import 'reminder_settings_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final _picker = ImagePicker();
+  bool _avatarLoading = false;
+
+  Future<void> _pickAvatar() async {
+    setState(() => _avatarLoading = true);
+    try {
+      final image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 900,
+        maxHeight: 900,
+        imageQuality: 82,
+      );
+      if (image == null) return;
+      if (!mounted) return;
+
+      await context.read<Session>().updateAvatar(image.path);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Foto profil diperbarui')));
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Upload foto gagal: $e')));
+    } finally {
+      if (mounted) setState(() => _avatarLoading = false);
+    }
+  }
+
+  Future<void> _openEditProfile(Map<String, dynamic> user) async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _EditProfileSheet(user: user),
+    );
+
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profil diperbarui')));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final session = context.watch<Session>();
     final user = session.user ?? {};
+    final role = user['role'] as String?;
+    final accountRole = AccountRole.byId(role);
     final className = (user['class'] as Map?)?['name'] as String?;
+    final studentCode = user['student_verification_code'] as String?;
+    final avatarUrl = user['avatar_url'] as String?;
 
     return Scaffold(
       body: SafeArea(
@@ -25,19 +88,44 @@ class ProfileScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(28, 8, 28, 0),
               child: Column(
                 children: [
-                  CircleAvatar(
-                    radius: 46,
-                    backgroundColor: AppTheme.mint,
-                    backgroundImage: user['avatar_url'] != null
-                        ? NetworkImage(user['avatar_url'] as String)
-                        : null,
-                    child: user['avatar_url'] == null
-                        ? const Icon(
-                            Icons.person,
-                            color: AppTheme.olive,
-                            size: 42,
-                          )
-                        : null,
+                  Stack(
+                    alignment: Alignment.bottomRight,
+                    children: [
+                      CircleAvatar(
+                        radius: 46,
+                        backgroundColor: accountRole.accent.withValues(
+                          alpha: 0.35,
+                        ),
+                        backgroundImage: avatarUrl != null
+                            ? NetworkImage(avatarUrl)
+                            : null,
+                        child: avatarUrl == null
+                            ? Icon(
+                                Icons.person,
+                                color: accountRole.primary,
+                                size: 42,
+                              )
+                            : null,
+                      ),
+                      IconButton.filled(
+                        tooltip: 'Ubah foto',
+                        style: IconButton.styleFrom(
+                          backgroundColor: accountRole.primary,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: _avatarLoading ? null : _pickAvatar,
+                        icon: _avatarLoading
+                            ? const SizedBox(
+                                height: 18,
+                                width: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.camera_alt_outlined, size: 18),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -51,6 +139,16 @@ class ProfileScreen extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodyMedium,
                     textAlign: TextAlign.center,
                   ),
+                  const SizedBox(height: 18),
+                  if (role == 'teacher' || role == 'student')
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: accountRole.primary,
+                      ),
+                      onPressed: () => _openEditProfile(user),
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Edit Profil'),
+                    ),
                   const SizedBox(height: 24),
                   SoftCard(
                     child: Column(
@@ -58,7 +156,7 @@ class ProfileScreen extends StatelessWidget {
                         _InfoRow(
                           icon: Icons.badge_outlined,
                           label: 'Peran',
-                          value: (user['role'] as String? ?? '-').toUpperCase(),
+                          value: (role ?? '-').toUpperCase(),
                         ),
                         if (user['school'] != null) ...[
                           const Divider(height: 28),
@@ -74,6 +172,19 @@ class ProfileScreen extends StatelessWidget {
                             icon: Icons.class_outlined,
                             label: 'Kelas',
                             value: className,
+                          ),
+                        ],
+                        if (studentCode != null && studentCode.isNotEmpty) ...[
+                          const Divider(height: 28),
+                          _InfoRow(
+                            icon: Icons.verified_user_outlined,
+                            label: 'Kode Parent',
+                            value: studentCode,
+                            trailing: IconButton.filledTonal(
+                              tooltip: 'Salin kode',
+                              onPressed: () => _copyStudentCode(studentCode),
+                              icon: const Icon(Icons.copy_outlined),
+                            ),
                           ),
                         ],
                       ],
@@ -104,6 +215,174 @@ class ProfileScreen extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _copyStudentCode(String code) async {
+    await Clipboard.setData(ClipboardData(text: code));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Kode siswa disalin')));
+  }
+}
+
+class _EditProfileSheet extends StatefulWidget {
+  const _EditProfileSheet({required this.user});
+
+  final Map<String, dynamic> user;
+
+  @override
+  State<_EditProfileSheet> createState() => _EditProfileSheetState();
+}
+
+class _EditProfileSheetState extends State<_EditProfileSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late final TextEditingController _schoolController;
+  late final TextEditingController _classController;
+  bool _loading = false;
+  String? _error;
+
+  bool get _isStudent => widget.user['role'] == 'student';
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(
+      text: widget.user['name'] as String? ?? '',
+    );
+    _schoolController = TextEditingController(
+      text: widget.user['school'] as String? ?? '',
+    );
+    _classController = TextEditingController(
+      text: (widget.user['class'] as Map?)?['name'] as String? ?? '',
+    );
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      await context.read<Session>().updateProfile(
+        name: _nameController.text.trim(),
+        school: _schoolController.text.trim(),
+        className: _isStudent ? _classController.text.trim() : null,
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } on ApiException catch (e) {
+      setState(() => _error = _formatApiError(e));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _schoolController.dispose();
+    _classController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 18, 20, bottomInset + 20),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Edit Profil',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Tutup',
+                    onPressed: _loading ? null : () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'Nama Lengkap'),
+                textCapitalization: TextCapitalization.words,
+                validator: (value) => (value == null || value.trim().isEmpty)
+                    ? 'Nama wajib diisi'
+                    : null,
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _schoolController,
+                decoration: const InputDecoration(labelText: 'Sekolah'),
+                textCapitalization: TextCapitalization.words,
+                validator: (value) => (value == null || value.trim().isEmpty)
+                    ? 'Sekolah wajib diisi'
+                    : null,
+              ),
+              if (_isStudent) ...[
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _classController,
+                  decoration: const InputDecoration(labelText: 'Kelas'),
+                  textCapitalization: TextCapitalization.characters,
+                  validator: (value) => (value == null || value.trim().isEmpty)
+                      ? 'Kelas wajib diisi'
+                      : null,
+                ),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!, style: const TextStyle(color: Colors.red)),
+              ],
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: _loading ? null : _save,
+                icon: _loading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: const Text('Simpan'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatApiError(ApiException error) {
+    final errors = error.errors;
+    if (errors == null || errors.isEmpty) return error.message;
+
+    final messages = <String>[];
+    for (final value in errors.values) {
+      if (value is List) {
+        messages.addAll(value.map((item) => '$item'));
+      } else if (value != null) {
+        messages.add('$value');
+      }
+    }
+
+    return messages.isEmpty ? error.message : messages.join('\n');
+  }
 }
 
 class _InfoRow extends StatelessWidget {
@@ -111,11 +390,13 @@ class _InfoRow extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
+    this.trailing,
   });
 
   final IconData icon;
   final String label;
   final String value;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -135,6 +416,7 @@ class _InfoRow extends StatelessWidget {
             ],
           ),
         ),
+        if (trailing != null) ...[const SizedBox(width: 8), trailing!],
       ],
     );
   }

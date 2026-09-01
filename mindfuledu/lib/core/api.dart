@@ -20,6 +20,10 @@ class Api {
     String? startTime,
     String? endTime,
     String? category,
+    String? activityKind,
+    String? activityType,
+    String? schoolClassName,
+    int? schoolClassId,
     String? repeatType,
     String? repeatUntil,
   }) async {
@@ -31,6 +35,10 @@ class Api {
         'start_time': startTime,
         'end_time': endTime,
         'category': category,
+        'activity_kind': activityKind,
+        'activity_type': activityType,
+        'school_class_name': schoolClassName,
+        'school_class_id': schoolClassId,
         'repeat_type': repeatType,
         'repeat_until': repeatUntil,
       },
@@ -45,6 +53,10 @@ class Api {
     String? startTime,
     String? endTime,
     String? category,
+    String? activityKind,
+    String? activityType,
+    String? schoolClassName,
+    int? schoolClassId,
   }) async {
     final res = await _api.put(
       '/activities/$activityId',
@@ -54,6 +66,10 @@ class Api {
         'start_time': startTime,
         'end_time': endTime,
         'category': category,
+        'activity_kind': activityKind,
+        'activity_type': activityType,
+        'school_class_name': schoolClassName,
+        'school_class_id': schoolClassId,
       },
     );
     return res.data as Map<String, dynamic>;
@@ -129,6 +145,53 @@ class Api {
 
   static Future<Map<String, dynamic>> burnoutOverview() async {
     final res = await _api.get('/burnout-analyses/overview');
+    return res.data as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> availableClassroomActivities({
+    required String date,
+  }) async {
+    final res = await _api.get(
+      '/classroom/activities/available',
+      query: {'date': date},
+    );
+    return res.data as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> joinClassroomActivity(
+    int activityId,
+  ) async {
+    final res = await _api.post('/classroom/activities/$activityId/join');
+    return res.data as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> classroomObservations(
+    int activityId,
+  ) async {
+    final res = await _api.get(
+      '/teacher/classroom-activities/$activityId/observations',
+    );
+    return res.data as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> parentDashboard({
+    required String date,
+  }) async {
+    final res = await _api.get('/parent/dashboard', query: {'date': date});
+    return res.data as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> linkParentChild({
+    required String school,
+    required String studentVerificationCode,
+  }) async {
+    final res = await _api.post(
+      '/parent/children',
+      data: {
+        'school': school,
+        'student_verification_code': studentVerificationCode,
+      },
+    );
     return res.data as Map<String, dynamic>;
   }
 

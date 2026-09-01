@@ -34,6 +34,7 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
         'password',
         'school',
         'class_id',
+        'student_verification_code',
         'profile_completed',
         'reminder_enabled',
         'reminder_time',
@@ -102,6 +103,20 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
         return $this->belongsToMany(SchoolClass::class, 'class_teacher', 'teacher_id', 'class_id');
     }
 
+    public function parentChildren(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'parent_student_links', 'parent_id', 'student_id')
+            ->withPivot('verified_at')
+            ->withTimestamps();
+    }
+
+    public function parents(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'parent_student_links', 'student_id', 'parent_id')
+            ->withPivot('verified_at')
+            ->withTimestamps();
+    }
+
     public function mindfulnessSessions(): HasMany
     {
         return $this->hasMany(MindfulnessSession::class);
@@ -163,5 +178,10 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
     public function isStudent(): bool
     {
         return $this->hasRole('student');
+    }
+
+    public function isParent(): bool
+    {
+        return $this->hasRole('parent');
     }
 }

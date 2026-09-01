@@ -28,9 +28,9 @@ class UserSeeder extends Seeder
         $user->assignRole('user');
 
         $classes = [
-            '5A' => SchoolClass::firstOrCreate(['name' => 'Kelas 5A'], ['grade' => '5']),
-            '5B' => SchoolClass::firstOrCreate(['name' => 'Kelas 5B'], ['grade' => '5']),
-            '6A' => SchoolClass::firstOrCreate(['name' => 'Kelas 6A'], ['grade' => '6']),
+            '5A' => SchoolClass::firstOrCreate(['name' => '5A', 'school' => 'SDN Contoh 1'], ['grade' => '5']),
+            '5B' => SchoolClass::firstOrCreate(['name' => '5B', 'school' => 'SDN Contoh 1'], ['grade' => '5']),
+            '6A' => SchoolClass::firstOrCreate(['name' => '6A', 'school' => 'SDN Contoh 2'], ['grade' => '6']),
         ];
 
         $teachers = [
@@ -87,9 +87,26 @@ class UserSeeder extends Seeder
                     'password' => Hash::make('password'),
                     'school' => $studentData['school'],
                     'class_id' => $classes[$studentData['class']]->id,
+                    'student_verification_code' => 'STU-'.strtoupper($studentData['class']).strtoupper(substr(md5($studentData['email']), 0, 4)),
                 ]
             );
             $student->assignRole('student');
+        }
+
+        $parent = User::updateOrCreate(
+            ['email' => 'parent@mindfuledu.test'],
+            [
+                'name' => 'Orang Tua Ani',
+                'password' => Hash::make('password'),
+                'school' => 'SDN Contoh 1',
+            ]
+        );
+        $parent->assignRole('parent');
+        $ani = User::where('email', 'siswa@mindfuledu.test')->first();
+        if ($ani) {
+            $parent->parentChildren()->syncWithoutDetaching([
+                $ani->id => ['verified_at' => now()],
+            ]);
         }
     }
 }

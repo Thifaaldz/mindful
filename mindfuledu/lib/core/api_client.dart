@@ -14,15 +14,15 @@ import 'package:flutter/foundation.dart';
 /// - macOS desktop: use `https://127.0.0.1/api`.
 const String kApiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'https://192.168.1.16/api',
+  defaultValue: 'https://192.168.100.60/api',
 );
 
-const _kBundledLanBaseUrl = 'https://192.168.1.16/api';
+const _kBundledLanBaseUrl = 'https://192.168.100.60/api';
 
 const String kApiFallbackUrls = String.fromEnvironment(
   'API_FALLBACK_URLS',
   defaultValue:
-      'https://192.168.1.16/api,https://10.0.2.2/api,https://127.0.0.1/api',
+      'https://192.168.100.60/api,https://10.0.2.2/api,https://127.0.0.1/api',
 );
 
 const _kConnectTimeout = Duration(seconds: 2);
@@ -66,6 +66,44 @@ class ApiClient {
 
   Future<ApiResponse> put(String path, {Object? data}) {
     return _send('PUT', path, body: data);
+  }
+
+  Future<ApiResponse> postMultipart(
+    String path, {
+    required Map<String, String> fields,
+    required String fileField,
+    required String filePath,
+  }) async {
+    ApiException? networkError;
+
+    for (final baseUrl in _candidateBaseUrls()) {
+      try {
+        final response = await _sendMultipartOnce(
+          baseUrl,
+          path,
+          fields: fields,
+          fileField: fileField,
+          filePath: filePath,
+        );
+        _activeBaseUrl = baseUrl;
+
+        return response;
+      } on TimeoutException {
+        networkError = ApiException('Waktu koneksi habis, coba lagi');
+      } on SocketException {
+        networkError = ApiException('Tidak dapat terhubung ke server');
+      } on IOException {
+        networkError = ApiException('Tidak dapat terhubung ke server');
+      } on FormatException {
+        throw ApiException('Respons server tidak valid');
+      } on ApiException {
+        rethrow;
+      } catch (e) {
+        throw ApiException('Terjadi kesalahan: $e');
+      }
+    }
+
+    throw networkError ?? ApiException('Tidak dapat terhubung ke server');
   }
 
   Future<ApiResponse> _send(
@@ -129,6 +167,66 @@ class ApiClient {
       request.headers.contentType = ContentType.json;
       request.write(jsonEncode(body));
     }
+
+    final response = await request.close().timeout(_kTimeout);
+    final raw = await response
+        .transform(utf8.decoder)
+        .join()
+        .timeout(_kTimeout);
+    final decoded = raw.isEmpty ? null : jsonDecode(raw);
+
+    if (response.statusCode >= 400) {
+      throw _mapError(decoded);
+    }
+
+    return ApiResponse(response.statusCode, decoded);
+  }
+
+  Future<ApiResponse> _sendMultipartOnce(
+    String baseUrl,
+    String path, {
+    required Map<String, String> fields,
+    required String fileField,
+    required String filePath,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final boundary = '----mindfuledu-${DateTime.now().microsecondsSinceEpoch}';
+    final file = File(filePath);
+    final fileName = file.uri.pathSegments.isEmpty
+        ? 'avatar.jpg'
+        : file.uri.pathSegments.last;
+    final ext = fileName.split('.').last.toLowerCase();
+    final mime = switch (ext) {
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      _ => 'image/jpeg',
+    };
+
+    final request = await _client.postUrl(uri).timeout(_kTimeout);
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    request.headers.set(
+      HttpHeaders.contentTypeHeader,
+      'multipart/form-data; boundary=$boundary',
+    );
+    if (_token != null) {
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $_token');
+    }
+
+    void writeAscii(String value) => request.add(utf8.encode(value));
+
+    for (final entry in fields.entries) {
+      writeAscii('--$boundary\r\n');
+      writeAscii('Content-Disposition: form-data; name="${entry.key}"\r\n\r\n');
+      writeAscii('${entry.value}\r\n');
+    }
+
+    writeAscii('--$boundary\r\n');
+    writeAscii(
+      'Content-Disposition: form-data; name="$fileField"; filename="$fileName"\r\n',
+    );
+    writeAscii('Content-Type: $mime\r\n\r\n');
+    await request.addStream(file.openRead()).timeout(_kTimeout);
+    writeAscii('\r\n--$boundary--\r\n');
 
     final response = await request.close().timeout(_kTimeout);
     final raw = await response

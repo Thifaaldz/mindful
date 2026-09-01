@@ -180,9 +180,30 @@ class _AnalysisDashboardScreenState extends State<AnalysisDashboardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(
-                          'Hasil Analisis',
-                          style: Theme.of(context).textTheme.headlineSmall,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Hasil Analisis',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.headlineSmall,
+                              ),
+                            ),
+                            IconButton.filledTonal(
+                              tooltip: 'History analisis',
+                              onPressed: analyses.isEmpty
+                                  ? null
+                                  : () => Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => _AnalysisHistoryScreen(
+                                          analyses: analyses,
+                                        ),
+                                      ),
+                                    ),
+                              icon: const Icon(Icons.history),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -340,6 +361,7 @@ class _TodayScaleCard extends StatelessWidget {
     final headline = '${recommendation['headline'] ?? 'Belum ada rekomendasi'}';
     final action = '${recommendation['action'] ?? ''}';
     final practice = '${recommendation['practice'] ?? ''}';
+    final practiceTitle = '${recommendation['practice_title'] ?? ''}'.trim();
     final activityCount = _numValue(today['activity_count']).round();
     final journalCount = _numValue(
       today['journal_count'],
@@ -393,7 +415,7 @@ class _TodayScaleCard extends StatelessWidget {
             if (action.isNotEmpty) ...[const SizedBox(height: 8), Text(action)],
             if (practice.isNotEmpty) ...[
               const SizedBox(height: 12),
-              _PracticeCallout(text: practice),
+              _PracticeCallout(title: practiceTitle, text: practice),
             ],
           ],
         ],
@@ -463,6 +485,7 @@ class _JournalReviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.secondary;
     final data = snapshot ?? <String, dynamic>{};
     final period = '${data['period_type'] ?? 'daily'}';
     final reviews = _journalReviews(data);
@@ -487,7 +510,7 @@ class _JournalReviewCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
-              const Icon(Icons.edit_note, color: AppTheme.olive),
+              Icon(Icons.edit_note, color: primary),
             ],
           ),
           const SizedBox(height: 10),
@@ -529,20 +552,50 @@ class _JournalReviewCard extends StatelessWidget {
               message:
                   'Belum ada review. Isi check-out dan jurnal pasca aktivitas untuk melihat masukan.',
             )
+          else if (reviews.length > 3)
+            SizedBox(
+              height: 250,
+              child: Scrollbar(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: _reviewGroupWidgets(grouped),
+                  ),
+                ),
+              ),
+            )
           else
-            for (final entry in grouped.entries) ...[
-              _JournalDayDivider(date: entry.key),
-              const SizedBox(height: 10),
-              for (var index = 0; index < entry.value.length; index++) ...[
-                _JournalReviewTile(review: entry.value[index]),
-                if (index != entry.value.length - 1) const SizedBox(height: 10),
-              ],
-              if (entry.key != grouped.keys.last) const SizedBox(height: 14),
-            ],
+            ..._reviewGroupWidgets(grouped),
         ],
       ),
     );
   }
+}
+
+List<Widget> _reviewGroupWidgets(
+  Map<String, List<Map<String, dynamic>>> grouped,
+) {
+  final widgets = <Widget>[];
+  final entries = grouped.entries.toList();
+
+  for (var entryIndex = 0; entryIndex < entries.length; entryIndex++) {
+    final entry = entries[entryIndex];
+    widgets.add(_JournalDayDivider(date: entry.key));
+    widgets.add(const SizedBox(height: 10));
+
+    for (var index = 0; index < entry.value.length; index++) {
+      widgets.add(_JournalReviewTile(review: entry.value[index]));
+      if (index != entry.value.length - 1) {
+        widgets.add(const SizedBox(height: 10));
+      }
+    }
+
+    if (entryIndex != entries.length - 1) {
+      widgets.add(const SizedBox(height: 14));
+    }
+  }
+
+  return widgets;
 }
 
 class _JournalDayDivider extends StatelessWidget {
@@ -552,11 +605,13 @@ class _JournalDayDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.secondary;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: AppTheme.mint,
+        color: primary.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppTheme.line),
       ),
@@ -564,7 +619,7 @@ class _JournalDayDivider extends StatelessWidget {
         _dayLabel(date),
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
           fontWeight: FontWeight.w800,
-          color: AppTheme.olive,
+          color: primary,
         ),
       ),
     );
@@ -578,6 +633,8 @@ class _JournalReviewTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.secondary;
+
     void openReview() {
       showDialog<void>(
         context: context,
@@ -611,7 +668,7 @@ class _JournalReviewTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.auto_awesome, color: AppTheme.olive),
+              Icon(Icons.auto_awesome, color: primary),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -638,6 +695,7 @@ class _JournalReviewDialogContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.secondary;
     final mood = '${review['mood_detected'] ?? review['mood'] ?? ''}'.trim();
     final suggestion = '${review['suggestion'] ?? ''}'.trim();
     final fact = '${review['fact'] ?? ''}'.trim();
@@ -649,6 +707,37 @@ class _JournalReviewDialogContent extends StatelessWidget {
       review['checked_out_at'] ?? review['activity_date'],
     );
     final dimensions = _listOfStrings(review['burnout_dimensions']);
+    final recommendedTactic = _jsonMap(review['recommended_tactic']);
+    final tacticTitle = '${recommendedTactic['title'] ?? ''}'.trim();
+    final tacticDescription =
+        '${recommendedTactic['description'] ?? recommendedTactic['practice'] ?? ''}'
+            .trim();
+    final tacticReason = '${recommendedTactic['why_this_tactic'] ?? ''}'.trim();
+
+    void openTechnique() {
+      if (recommendedTactic.isEmpty) return;
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => KabatZinnPracticeScreen(
+            snapshot: {
+              'source': 'journal_review',
+              'category': _categoryFromReview(review),
+              'recommendation_summary': {
+                'practice_code': recommendedTactic['code'],
+                'practice_title': recommendedTactic['title'],
+                'practice': tacticDescription,
+                'recommended_movement':
+                    recommendedTactic['recommended_movement'],
+                'why_this_tactic': recommendedTactic['why_this_tactic'],
+                'tactic': recommendedTactic,
+              },
+              'tactic': recommendedTactic,
+            },
+          ),
+        ),
+      );
+    }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -660,7 +749,7 @@ class _JournalReviewDialogContent extends StatelessWidget {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             if (mood.isNotEmpty)
-              StatusPill(label: 'Mood: $mood', color: AppTheme.olive),
+              StatusPill(label: 'Mood: $mood', color: primary),
             _AnalysisSourceBadge(source: source),
             Text(
               meta,
@@ -682,6 +771,23 @@ class _JournalReviewDialogContent extends StatelessWidget {
         if (suggestion.isNotEmpty) ...[
           const SizedBox(height: 10),
           _JournalSuggestionBubble(text: suggestion),
+        ],
+        if (recommendedTactic.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _PracticeCallout(title: tacticTitle, text: tacticDescription),
+          if (tacticReason.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _RecommendationDetailLine(
+              icon: Icons.lightbulb_outline,
+              text: tacticReason,
+            ),
+          ],
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            onPressed: openTechnique,
+            icon: const Icon(Icons.self_improvement),
+            label: const Text('Buka Teknik Ini'),
+          ),
         ],
         if (plan.isNotEmpty) ...[
           const SizedBox(height: 8),
@@ -758,18 +864,20 @@ class _JournalSuggestionBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.secondary;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppTheme.mint,
+        color: primary.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppTheme.line),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.auto_awesome, color: AppTheme.olive),
+          Icon(Icons.auto_awesome, color: primary),
           const SizedBox(width: 10),
           Expanded(child: Text(text)),
         ],
@@ -991,6 +1099,13 @@ class _RecommendationCard extends StatelessWidget {
     final factors = (recommendation['dominant_factors'] as List? ?? [])
         .map((item) => _factorLabel('$item'))
         .toList();
+    final review = '${recommendation['analysis_review'] ?? ''}'.trim();
+    final movement = '${recommendation['recommended_movement'] ?? ''}'.trim();
+    final reason = '${recommendation['why_this_tactic'] ?? ''}'.trim();
+    final practiceTitle = '${recommendation['practice_title'] ?? ''}'.trim();
+    final reductionSteps = _listOfStrings(
+      recommendation['risk_reduction_steps'],
+    ).where((item) => item.trim().isNotEmpty).toList();
     final canStart = const {'hijau', 'kuning', 'merah'}.contains(category);
     void openPractice() {
       Navigator.of(context).push(
@@ -1013,13 +1128,63 @@ class _RecommendationCard extends StatelessWidget {
             '${recommendation['action'] ?? ''}',
             style: Theme.of(context).textTheme.bodyLarge,
           ),
+          if (review.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _RecommendationDetailLine(
+              icon: Icons.psychology_outlined,
+              text: review,
+            ),
+          ],
+          if (reason.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _RecommendationDetailLine(
+              icon: Icons.lightbulb_outline,
+              text: reason,
+            ),
+          ],
+          if (reductionSteps.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ...reductionSteps.map(
+              (step) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: _RecommendationDetailLine(
+                  icon: Icons.check_circle_outline,
+                  text: step,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
-          _PracticeCallout(text: '${recommendation['practice'] ?? ''}'),
+          _PracticeCallout(
+            title: practiceTitle,
+            text: '${recommendation['practice'] ?? ''}',
+          ),
+          if (movement.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _RecommendationDetailLine(
+              icon: Icons.accessibility_new,
+              text: movement,
+            ),
+          ],
           const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: canStart ? openPractice : null,
-            icon: const Icon(Icons.play_arrow),
-            label: const Text('Mulai Latihan'),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: canStart ? openPractice : null,
+                  icon: const Icon(Icons.menu_book_outlined),
+                  label: const Text('Info Teknik'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: canStart ? openPractice : null,
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Mulai Latihan'),
+                ),
+              ),
+            ],
           ),
           if (factors.isNotEmpty) ...[
             const SizedBox(height: 14),
@@ -1040,31 +1205,253 @@ class _RecommendationCard extends StatelessWidget {
   }
 }
 
-class _PracticeCallout extends StatelessWidget {
-  const _PracticeCallout({required this.text});
+class _AnalysisHistoryScreen extends StatelessWidget {
+  const _AnalysisHistoryScreen({required this.analyses});
 
+  final List<Map<String, dynamic>> analyses;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = analyses
+        .where((item) => item['period_type'] != null)
+        .toList(growable: false);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('History Analisis')),
+      body: SafeArea(
+        child: items.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.all(24),
+                child: _InfoCard(
+                  message:
+                      'Belum ada history. Jalankan analisis harian, mingguan, atau bulanan untuk menyimpan hasil.',
+                ),
+              )
+            : ListView.separated(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+                itemCount: items.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final snapshot = items[index];
+                  return _AnalysisHistoryTile(
+                    snapshot: snapshot,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            _AnalysisHistoryDetailScreen(snapshot: snapshot),
+                      ),
+                    ),
+                  );
+                },
+              ),
+      ),
+    );
+  }
+}
+
+class _AnalysisHistoryTile extends StatelessWidget {
+  const _AnalysisHistoryTile({required this.snapshot, required this.onTap});
+
+  final Map<String, dynamic> snapshot;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final category = '${snapshot['category'] ?? 'belum cukup'}';
+    final recommendation = _jsonMap(snapshot['recommendation_summary']);
+    final title = '${recommendation['practice_title'] ?? 'Rekomendasi'}';
+    final period = '${snapshot['period_type'] ?? 'daily'}';
+    final score = snapshot['final_burnout_risk_score'];
+    final journalCount = _numValue(
+      _jsonMap(snapshot['payload'])['journal_count'],
+      fallback: _journalReviews(snapshot).length.toDouble(),
+    ).round();
+
+    return Card(
+      child: ListTile(
+        onTap: onTap,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 10,
+        ),
+        leading: CircleAvatar(
+          backgroundColor: _categoryColor(category).withValues(alpha: 0.14),
+          child: Icon(
+            Icons.analytics_outlined,
+            color: _categoryColor(category),
+          ),
+        ),
+        title: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              StatusPill(
+                label: _periodReviewLabel(period),
+                color: AppTheme.muted,
+              ),
+              StatusPill(
+                label: _historyRangeLabel(snapshot),
+                color: AppTheme.muted,
+              ),
+              StatusPill(
+                label: _categoryLabel(category),
+                color: _categoryColor(category),
+              ),
+              if (score != null)
+                StatusPill(
+                  label: 'Skor ${_numValue(score).toStringAsFixed(0)}',
+                  color: _scoreColor(_numValue(score)),
+                ),
+              StatusPill(label: '$journalCount review', color: AppTheme.muted),
+            ],
+          ),
+        ),
+        trailing: const Icon(Icons.chevron_right),
+      ),
+    );
+  }
+}
+
+class _AnalysisHistoryDetailScreen extends StatelessWidget {
+  const _AnalysisHistoryDetailScreen({required this.snapshot});
+
+  final Map<String, dynamic> snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final category = '${snapshot['category'] ?? 'belum cukup'}';
+    final score = snapshot['final_burnout_risk_score'];
+    final period = '${snapshot['period_type'] ?? 'daily'}';
+    final activityCount = _numValue(snapshot['activity_count']).round();
+    final journalCount = _numValue(
+      _jsonMap(snapshot['payload'])['journal_count'],
+      fallback: _journalReviews(snapshot).length.toDouble(),
+    ).round();
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Detail History')),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+          children: [
+            SoftCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _historyRangeLabel(snapshot),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      StatusPill(
+                        label: _periodReviewLabel(period),
+                        color: AppTheme.muted,
+                      ),
+                      StatusPill(
+                        label: _categoryLabel(category),
+                        color: _categoryColor(category),
+                      ),
+                      if (score != null)
+                        StatusPill(
+                          label: 'Skor ${_numValue(score).toStringAsFixed(0)}',
+                          color: _scoreColor(_numValue(score)),
+                        ),
+                      StatusPill(
+                        label: '$activityCount activity',
+                        color: AppTheme.muted,
+                      ),
+                      StatusPill(
+                        label: '$journalCount review',
+                        color: AppTheme.muted,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _RecommendationCard(snapshot: snapshot),
+            const SizedBox(height: 16),
+            _JournalReviewCard(snapshot: snapshot),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PracticeCallout extends StatelessWidget {
+  const _PracticeCallout({required this.text, this.title = ''});
+
+  final String title;
   final String text;
 
   @override
   Widget build(BuildContext context) {
     if (text.isEmpty) return const SizedBox.shrink();
+    final primary = Theme.of(context).colorScheme.secondary;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppTheme.mint,
+        color: primary.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppTheme.line),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.self_improvement, color: AppTheme.olive),
+          Icon(Icons.self_improvement, color: primary),
           const SizedBox(width: 10),
-          Expanded(child: Text(text)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (title.isNotEmpty) ...[
+                  Text(title, style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 4),
+                ],
+                Text(text),
+              ],
+            ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _RecommendationDetailLine extends StatelessWidget {
+  const _RecommendationDetailLine({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    if (text.isEmpty) return const SizedBox.shrink();
+    final primary = Theme.of(context).colorScheme.secondary;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: primary),
+        const SizedBox(width: 8),
+        Expanded(child: Text(text)),
+      ],
     );
   }
 }
@@ -1274,9 +1661,11 @@ class _InfoInline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.secondary;
+
     return Row(
       children: [
-        const Icon(Icons.info_outline, color: AppTheme.olive),
+        Icon(Icons.info_outline, color: primary),
         const SizedBox(width: 12),
         Expanded(child: Text(message)),
       ],
@@ -1458,6 +1847,18 @@ String _periodReviewLabel(String period) {
   };
 }
 
+String _historyRangeLabel(Map<String, dynamic> snapshot) {
+  final start = _parseDate(snapshot['period_start']);
+  final end = _parseDate(snapshot['period_end'] ?? snapshot['period_start']);
+  final format = DateFormat('d MMM yyyy', 'id_ID');
+
+  if (DateUtils.isSameDay(start, end)) {
+    return format.format(start);
+  }
+
+  return '${format.format(start)} - ${format.format(end)}';
+}
+
 String _reviewDateLabel(dynamic date) {
   final parsed = DateTime.tryParse('$date');
   return parsed == null
@@ -1467,6 +1868,17 @@ String _reviewDateLabel(dynamic date) {
 
 String _sourceLabel(String source) {
   return _isAiSource(source) ? 'Gemini AI' : 'Lokal';
+}
+
+String _categoryFromReview(Map<String, dynamic> review) {
+  if (review['crisis_flag'] == true) return 'merah';
+
+  final mood = '${review['mood_detected'] ?? review['mood'] ?? ''}';
+  if (const {'cemas', 'sedih', 'marah', 'lelah'}.contains(mood)) {
+    return 'kuning';
+  }
+
+  return 'hijau';
 }
 
 IconData _sourceIcon(String source) {

@@ -1049,7 +1049,9 @@ class _PracticeMethod {
 }
 
 _PracticeMethod _methodForSnapshot(Map<String, dynamic> snapshot) {
-  final tactic = _mapOrNull(snapshot['tactic']);
+  final recommendation = _mapOrNull(snapshot['recommendation_summary']);
+  final tactic =
+      _mapOrNull(snapshot['tactic']) ?? _mapOrNull(recommendation?['tactic']);
   if (tactic != null) {
     return _methodFromTactic(tactic);
   }

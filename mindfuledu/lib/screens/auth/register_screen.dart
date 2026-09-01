@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/account_role.dart';
 import '../../core/api_client.dart';
 import '../../core/google_auth_service.dart';
 import '../../core/session.dart';
+import '../../widgets/app_chrome.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+  const RegisterScreen({super.key, required this.selectedRole});
+
+  final String selectedRole;
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -17,10 +21,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _passwordConfirmController = TextEditingController();
+  final _schoolController = TextEditingController();
+  final _studentCodeController = TextEditingController();
   bool _loading = false;
   bool _googleLoading = false;
   bool _rememberDevice = true;
   String? _error;
+
+  AccountRole get _role => AccountRole.byId(widget.selectedRole);
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -33,6 +41,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
         passwordConfirmation: _passwordConfirmController.text,
+        role: _role.id,
+        school: _role.id == 'parent' ? _schoolController.text.trim() : null,
+        studentVerificationCode: _role.id == 'parent'
+            ? _studentCodeController.text.trim()
+            : null,
         rememberDevice: _rememberDevice,
       );
       if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
@@ -55,6 +68,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       await context.read<Session>().loginWithGoogleIdToken(
         idToken,
+        role: _role.id,
         rememberDevice: _rememberDevice,
       );
       if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
@@ -72,13 +86,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _passwordConfirmController.dispose();
+    _schoolController.dispose();
+    _studentCodeController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Daftar Akun')),
+      backgroundColor: _role.surface,
+      appBar: AppBar(
+        backgroundColor: _role.surface,
+        foregroundColor: _role.primary,
+        title: Text(_role.registerTitle),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -87,9 +108,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Center(
+                  child: BrandMark(
+                    size: 86,
+                    radius: 22,
+                    iconSize: 46,
+                    backgroundColor: _role.primary,
+                    iconColor: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 20),
                 Text(
-                  'Buat Akun MindfulEdu',
-                  style: Theme.of(context).textTheme.titleLarge,
+                  _role.registerTitle,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: _role.primary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _role.subtitle,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 20),
                 TextFormField(
@@ -130,6 +171,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ? 'Konfirmasi tidak sesuai'
                       : null,
                 ),
+                if (_role.id == 'parent') ...[
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _schoolController,
+                    decoration: const InputDecoration(
+                      labelText: 'Sekolah anak',
+                      border: OutlineInputBorder(),
+                    ),
+                    textCapitalization: TextCapitalization.words,
+                    validator: (value) =>
+                        (value == null || value.trim().isEmpty)
+                        ? 'Sekolah anak wajib diisi'
+                        : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _studentCodeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Kode verifikasi siswa',
+                      border: OutlineInputBorder(),
+                    ),
+                    textCapitalization: TextCapitalization.characters,
+                    validator: (value) =>
+                        (value == null || value.trim().isEmpty)
+                        ? 'Kode verifikasi siswa wajib diisi'
+                        : null,
+                  ),
+                ],
                 const SizedBox(height: 8),
                 SwitchListTile.adaptive(
                   contentPadding: EdgeInsets.zero,
@@ -146,6 +215,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ],
                 const SizedBox(height: 24),
                 FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: _role.primary),
                   onPressed: _loading ? null : _submit,
                   child: _loading
                       ? const SizedBox(
@@ -153,10 +223,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           width: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Daftar'),
+                      : Text(_role.registerTitle),
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _role.primary,
+                    side: BorderSide(
+                      color: _role.primary.withValues(alpha: 0.24),
+                    ),
+                  ),
                   onPressed: _googleLoading ? null : _registerWithGoogle,
                   icon: _googleLoading
                       ? const SizedBox(
@@ -165,7 +241,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.g_mobiledata, size: 28),
-                  label: const Text('Daftar dengan Google'),
+                  label: Text('${_role.registerTitle} dengan Google'),
                 ),
               ],
             ),

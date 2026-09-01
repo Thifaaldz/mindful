@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Activity;
 use App\Models\BurnoutAnalysisSnapshot;
+use App\Models\MindfulTactic;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -53,6 +54,32 @@ class BurnoutAnalysisService
             'title' => 'Awareness of Breathing',
             'practice' => 'Awareness of Breathing 2-3 menit sebelum aktivitas berikutnya.',
         ],
+        'mindful_breathing' => [
+            'title' => 'Mindful Breathing',
+            'practice' => 'Mindful Breathing 3-5 menit untuk kembali ke napas sebagai anchor perhatian.',
+            'duration_minutes' => 5,
+            'steps' => [
+                'Duduk atau berdiri dengan nyaman dan lepaskan ketegangan yang tidak perlu.',
+                'Perhatikan napas masuk dan napas keluar sebagaimana adanya.',
+                'Sadari sensasi napas pada hidung, dada, atau perut.',
+                'Jika perhatian berpindah, sadari lalu kembali perlahan pada napas.',
+                'Akhiri dengan menyadari tubuh dan lingkungan.',
+            ],
+            'best_for' => ['sulit fokus', 'stres ringan', 'pikiran ramai', 'jeda setelah aktivitas'],
+        ],
+        'focused_attention' => [
+            'title' => 'Focused Attention Meditation',
+            'practice' => 'Focused Attention 5 menit dengan satu anchor perhatian.',
+            'duration_minutes' => 5,
+            'steps' => [
+                'Pilih satu anchor, misalnya sensasi napas di ujung hidung.',
+                'Pertahankan perhatian pada anchor tanpa mengejar pikiran lain.',
+                'Saat perhatian berpindah, beri label sederhana seperti berpikir.',
+                'Kembali ke anchor dengan lembut.',
+                'Tutup dengan menyadari seluruh tubuh dan lingkungan.',
+            ],
+            'best_for' => ['distraksi', 'sulit konsentrasi', 'sering mengecek ponsel', 'fokus belajar'],
+        ],
         'sitting_meditation' => [
             'title' => 'Sitting Meditation',
             'practice' => 'Sitting meditation fokus napas 10 menit.',
@@ -73,6 +100,32 @@ class BurnoutAnalysisService
             'title' => 'Walking Meditation',
             'practice' => 'Walking meditation 5 menit untuk jeda aktif.',
         ],
+        'open_monitoring' => [
+            'title' => 'Open Monitoring',
+            'practice' => 'Open monitoring 10 menit untuk mengamati pikiran, suara, emosi, dan sensasi tanpa bereaksi.',
+            'duration_minutes' => 10,
+            'steps' => [
+                'Stabilkan diri melalui napas.',
+                'Buka awareness ke tubuh.',
+                'Sadari suara yang muncul.',
+                'Sadari pikiran dan emosi tanpa mengejar atau menolak.',
+                'Kembali ke napas untuk menutup sesi.',
+            ],
+            'best_for' => ['overwhelmed', 'pikiran ramai', 'emosi bercampur', 'non-reactivity'],
+        ],
+        'mindfulness_of_sounds' => [
+            'title' => 'Mindfulness of Sounds',
+            'practice' => 'Mindfulness of Sounds 5 menit sebagai grounding melalui suara.',
+            'duration_minutes' => 5,
+            'steps' => [
+                'Siapkan posisi yang nyaman.',
+                'Dengarkan suara dekat tanpa menilai.',
+                'Dengarkan suara jauh tanpa mengejar sumbernya.',
+                'Sadari suara muncul, berubah, dan menghilang.',
+                'Kembali pada napas dan tutup sesi.',
+            ],
+            'best_for' => ['grounding', 'sulit fokus', 'pikiran bergerak terus', 'latihan ringan'],
+        ],
         'rain_self_compassion' => [
             'title' => 'RAIN',
             'practice' => 'RAIN untuk mengenali dan merawat emosi berat.',
@@ -80,6 +133,32 @@ class BurnoutAnalysisService
         'loving_kindness' => [
             'title' => 'Loving-Kindness Meditation',
             'practice' => 'Loving-kindness meditation 7 menit.',
+        ],
+        'mountain_meditation' => [
+            'title' => 'Mountain Meditation',
+            'practice' => 'Mountain meditation 10-15 menit untuk melatih kestabilan saat emosi berubah.',
+            'duration_minutes' => 15,
+            'steps' => [
+                'Mulai dengan persiapan tubuh dan napas.',
+                'Bayangkan bentuk gunung yang kokoh.',
+                'Bayangkan cuaca berubah di sekitar gunung.',
+                'Hubungkan perubahan cuaca dengan perubahan pikiran dan emosi.',
+                'Rasakan kestabilan tubuh sebelum kembali pada napas.',
+            ],
+            'best_for' => ['emosi naik turun', 'tidak stabil', 'perubahan', 'tekanan tinggi', 'acceptance'],
+        ],
+        'informal_mindfulness' => [
+            'title' => 'Informal Mindfulness',
+            'practice' => 'Mindfulness 2-5 menit dalam aktivitas harian seperti minum, makan, atau berjalan.',
+            'duration_minutes' => 3,
+            'steps' => [
+                'Pilih aktivitas harian sederhana seperti minum, makan, atau berjalan.',
+                'Sadari sensasi tubuh, aroma, warna, langkah, atau napas.',
+                'Lakukan aktivitas lebih perlahan dari biasanya.',
+                'Jika pikiran berpindah, kembali ke sensasi aktivitas.',
+                'Akhiri dengan menyadari kondisi tubuh.',
+            ],
+            'best_for' => ['waktu terbatas', 'maintenance', 'pencegahan', 'rutinitas harian'],
         ],
         'reflective_journal' => [
             'title' => 'Jurnal Reflektif Harian',
@@ -90,7 +169,34 @@ class BurnoutAnalysisService
     public function analyze(User $user, string $periodType, Carbon|string|null $date = null, string $source = 'manual'): BurnoutAnalysisSnapshot
     {
         [$periodStart, $periodEnd] = $this->periodRange($periodType, $date);
-        $analysis = $this->analysisData($user, $periodType, $periodStart, $periodEnd, true);
+        $activities = $this->activitiesForPeriod($user, $periodStart, $periodEnd);
+        $signature = $this->analysisSignature(
+            $user,
+            $periodType,
+            $periodStart,
+            $periodEnd,
+            $activities,
+            $this->selfReportLevels($user, $periodStart, $periodEnd),
+        );
+
+        $cached = $this->cachedAnalysisSnapshot($user, $periodType, $periodStart, $periodEnd, $signature);
+        if ($cached) {
+            $cached->setAttribute('payload', [
+                ...($cached->payload ?? []),
+                'cache_hit' => true,
+                'cache_key' => $this->analysisCacheKey($user, $periodType, $periodStart, $periodEnd, $signature),
+            ]);
+
+            return $cached;
+        }
+
+        $analysis = $this->analysisDataFromActivities($user, $periodType, $periodStart, $periodEnd, $activities, true);
+        $analysis['payload'] = [
+            ...($analysis['payload'] ?? []),
+            'analysis_signature' => $signature,
+            'cache_hit' => false,
+            'cache_key' => $this->analysisCacheKey($user, $periodType, $periodStart, $periodEnd, $signature),
+        ];
 
         return $user->burnoutAnalysisSnapshots()->create([
             'source' => $source,
@@ -178,7 +284,14 @@ class BurnoutAnalysisService
     private function activitiesForPeriod(User $user, Carbon $periodStart, Carbon $periodEnd): Collection
     {
         return $user->activities()
-            ->whereBetween('activity_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
+            ->when(
+                $periodStart->isSameDay($periodEnd),
+                fn ($query) => $query->whereDate('activity_date', $periodStart->toDateString()),
+                fn ($query) => $query->whereBetween('activity_date', [
+                    $periodStart->toDateString(),
+                    $periodEnd->toDateString(),
+                ])
+            )
             ->where('status', '!=', Activity::STATUS_CANCELLED)
             ->orderBy('start_at')
             ->get();
@@ -197,8 +310,9 @@ class BurnoutAnalysisService
         $journalRows = $completed->filter(fn (Activity $activity) => $this->hasStructuredPostJournal($activity));
         $crisisCount = $journalRows->filter(fn (Activity $activity) => (bool) $activity->checkout_crisis_flag)->count();
         $selfReportLevels = $this->selfReportLevels($user, $periodStart, $periodEnd);
+        $tacticCatalog = $this->mindfulnessTacticCatalog();
 
-        $mlPayload = $this->mlPayload($user, $periodType, $periodCapacity, $activities, $selfReportLevels);
+        $mlPayload = $this->mlPayload($user, $periodType, $periodCapacity, $activities, $selfReportLevels, $tacticCatalog);
         $mlScore = $useMl ? $this->scoreViaMl($mlPayload) : null;
 
         if ($mlScore) {
@@ -240,10 +354,12 @@ class BurnoutAnalysisService
 
         $recommendation = is_array($mlScore['recommendation_summary'] ?? null)
             ? $mlScore['recommendation_summary']
-            : $this->recommendation($category, $dominantFactors, $user);
-        $recommendationCodes = is_array($mlScore['recommendation_codes'] ?? null)
-            ? $mlScore['recommendation_codes']
-            : ($recommendation['codes'] ?? []);
+            : $this->recommendation($category, $dominantFactors, $user, $tacticCatalog);
+        $recommendation = $this->enrichRecommendationWithTactic($recommendation, $category, $dominantFactors, $user, $tacticCatalog);
+        $recommendationCodes = array_values(array_unique($recommendation['codes'] ?? []));
+        if ($recommendationCodes === [] && is_array($mlScore['recommendation_codes'] ?? null)) {
+            $recommendationCodes = $mlScore['recommendation_codes'];
+        }
 
         return [
             'data_sufficiency' => $dataSufficiency,
@@ -270,7 +386,8 @@ class BurnoutAnalysisService
                 'formula' => 'final = 0.50 * min(100, workload_score_raw) + 0.50 * wellbeing_score; current hours memakai nilai terbesar dari actual/planned untuk completed dan planned hours untuk aktivitas belum selesai',
                 'ml_service_used' => $mlScore !== null,
                 'ml_calculation' => $mlScore['calculation'] ?? null,
-                'journal_reviews' => $this->journalReviews($journalRows),
+                'recommendation_source' => $recommendation['source'] ?? ($mlScore !== null ? 'fastapi-rule' : 'laravel-rule'),
+                'journal_reviews' => $this->journalReviews($journalRows, $tacticCatalog),
                 'activity_breakdown' => $this->activityBreakdown($activities),
             ],
         ];
@@ -385,7 +502,7 @@ class BurnoutAnalysisService
         return (float) $activity->planned_hours;
     }
 
-    private function mlPayload(User $user, string $periodType, float $periodCapacity, Collection $activities, array $selfReportLevels): array
+    private function mlPayload(User $user, string $periodType, float $periodCapacity, Collection $activities, array $selfReportLevels, array $tacticCatalog): array
     {
         return [
             'period_type' => $periodType,
@@ -393,9 +510,11 @@ class BurnoutAnalysisService
             'period_capacity_hours' => $periodCapacity,
             'self_report_levels' => $selfReportLevels,
             'scoring_version' => self::SCORING_VERSION,
+            'mindfulness_tactics' => $tacticCatalog,
             'activities' => $activities->map(fn (Activity $activity) => [
                 'title' => $activity->title,
                 'category_name' => $activity->category,
+                'activity_kind' => $activity->activity_kind,
                 'planned_hours' => (float) $activity->planned_hours,
                 'actual_hours' => $this->effectiveHours($activity),
                 'intensity_factor' => (float) $activity->intensity_factor,
@@ -413,6 +532,83 @@ class BurnoutAnalysisService
                 'checkout_crisis_flag' => (bool) $activity->checkout_crisis_flag,
             ])->values()->all(),
         ];
+    }
+
+    private function analysisSignature(User $user, string $periodType, Carbon $periodStart, Carbon $periodEnd, Collection $activities, array $selfReportLevels): string
+    {
+        $payload = [
+            'scoring_version' => self::SCORING_VERSION,
+            'period_type' => $periodType,
+            'period_start' => $periodStart->toDateString(),
+            'period_end' => $periodEnd->toDateString(),
+            'role_context' => $user->isStudent() ? 'student' : ($user->isTeacher() ? 'teacher' : 'other'),
+            'self_report_levels' => $selfReportLevels,
+            'mindfulness_tactics' => array_map(
+                fn (array $tactic) => [
+                    'code' => $tactic['code'],
+                    'title' => $tactic['title'],
+                    'description' => $tactic['description'],
+                    'knowledge' => $tactic['knowledge'],
+                    'duration_minutes' => $tactic['duration_minutes'],
+                    'steps' => $tactic['steps'],
+                    'best_for' => $tactic['best_for'],
+                ],
+                $this->mindfulnessTacticCatalog(),
+            ),
+            'activities' => $activities
+                ->map(fn (Activity $activity) => [
+                    'id' => $activity->id,
+                    'updated_at' => $activity->updated_at?->toIso8601String(),
+                    'title' => $activity->title,
+                    'activity_date' => $activity->activity_date?->toDateString(),
+                    'category' => $activity->category,
+                    'activity_kind' => $activity->activity_kind,
+                    'status' => $activity->status,
+                    'start_at' => $activity->start_at?->toIso8601String(),
+                    'end_at' => $activity->end_at?->toIso8601String(),
+                    'planned_hours' => (float) $activity->planned_hours,
+                    'actual_hours' => $activity->actual_hours === null ? null : (float) $activity->actual_hours,
+                    'intensity_factor' => (float) $activity->intensity_factor,
+                    'checkin_mood' => $activity->checkin_mood,
+                    'checkin_intensity' => $activity->checkin_intensity,
+                    'checkin_trigger' => $activity->checkin_trigger,
+                    'checkout_mood' => $activity->checkout_mood,
+                    'checkout_fact' => $activity->checkout_fact,
+                    'checkout_feeling' => $activity->checkout_feeling,
+                    'checkout_pattern' => $activity->checkout_pattern,
+                    'checkout_plan' => $activity->checkout_plan,
+                    'checkout_burnout_tags' => $activity->checkout_burnout_tags ?? [],
+                    'checkout_auto_burnout_tags' => $activity->checkout_auto_burnout_tags ?? [],
+                    'checkout_mood_detected' => $activity->checkout_mood_detected,
+                    'checkout_crisis_flag' => (bool) $activity->checkout_crisis_flag,
+                ])
+                ->values()
+                ->all(),
+        ];
+
+        return hash('sha256', json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '');
+    }
+
+    private function analysisCacheKey(User $user, string $periodType, Carbon $periodStart, Carbon $periodEnd, string $signature): string
+    {
+        return hash('sha256', implode('|', [
+            $user->id,
+            $periodType,
+            $periodStart->toDateString(),
+            $periodEnd->toDateString(),
+            $signature,
+        ]));
+    }
+
+    private function cachedAnalysisSnapshot(User $user, string $periodType, Carbon $periodStart, Carbon $periodEnd, string $signature): ?BurnoutAnalysisSnapshot
+    {
+        return $user->burnoutAnalysisSnapshots()
+            ->where('period_type', $periodType)
+            ->whereDate('period_start', $periodStart->toDateString())
+            ->whereDate('period_end', $periodEnd->toDateString())
+            ->latest()
+            ->get()
+            ->first(fn (BurnoutAnalysisSnapshot $snapshot) => data_get($snapshot->payload, 'analysis_signature') === $signature);
     }
 
     private function scoreViaMl(array $payload): ?array
@@ -643,28 +839,99 @@ class BurnoutAnalysisService
         ])->filter(fn ($value) => filled($value))->implode(' ');
     }
 
-    private function journalReviews(Collection $journalRows): array
+    private function journalReviews(Collection $journalRows, array $tacticCatalog): array
     {
         return $journalRows
             ->sortByDesc(fn (Activity $activity) => $activity->checkout_at)
-            ->map(fn (Activity $activity) => [
-                'activity_id' => $activity->id,
-                'title' => $activity->title,
-                'activity_date' => $activity->activity_date?->toDateString(),
-                'checked_out_at' => $activity->checkout_at?->toIso8601String(),
-                'mood' => $activity->checkout_mood,
-                'mood_detected' => $activity->checkout_mood_detected,
-                'fact' => $activity->checkout_fact,
-                'feeling' => $activity->checkout_feeling,
-                'pattern' => $activity->checkout_pattern,
-                'plan' => $activity->checkout_plan,
-                'suggestion' => $activity->checkout_suggestion,
-                'crisis_flag' => (bool) $activity->checkout_crisis_flag,
-                'burnout_dimensions' => $this->burnoutDimensions($activity),
-                'analysis_source' => $activity->checkout_analysis_source,
-            ])
+            ->map(function (Activity $activity) use ($tacticCatalog) {
+                $recommendedTactic = $this->recommendedTacticForJournalActivity($activity, $tacticCatalog);
+
+                return [
+                    'activity_id' => $activity->id,
+                    'title' => $activity->title,
+                    'activity_date' => $activity->activity_date?->toDateString(),
+                    'checked_out_at' => $activity->checkout_at?->toIso8601String(),
+                    'mood' => $activity->checkout_mood,
+                    'mood_detected' => $activity->checkout_mood_detected,
+                    'fact' => $activity->checkout_fact,
+                    'feeling' => $activity->checkout_feeling,
+                    'pattern' => $activity->checkout_pattern,
+                    'plan' => $activity->checkout_plan,
+                    'suggestion' => $activity->checkout_suggestion,
+                    'crisis_flag' => (bool) $activity->checkout_crisis_flag,
+                    'burnout_dimensions' => $this->burnoutDimensions($activity),
+                    'analysis_source' => $activity->checkout_analysis_source,
+                    'recommended_tactic' => $recommendedTactic,
+                ];
+            })
             ->values()
             ->all();
+    }
+
+    public function recommendedTacticForJournalActivity(Activity $activity, ?array $tacticCatalog = null): array
+    {
+        $tacticCatalog ??= $this->mindfulnessTacticCatalog();
+        $raw = $this->decodedCheckoutAnalysis($activity);
+        $rawCode = is_string($raw['practice_code'] ?? null) ? $raw['practice_code'] : null;
+        $code = $rawCode ?: $this->journalPracticeCodeFor($activity);
+        $tactic = $this->tacticForCode((string) $code, $tacticCatalog);
+        $source = $rawCode ? ($activity->checkout_analysis_source ?: 'gemini') : 'local';
+
+        return [
+            'code' => $tactic['code'],
+            'category' => $tactic['category'] ?? $tactic['code'],
+            'title' => $tactic['title'],
+            'description' => $tactic['description'] ?: $tactic['practice'],
+            'knowledge' => $tactic['knowledge'] ?? null,
+            'duration_minutes' => $tactic['duration_minutes'] ?? 3,
+            'steps' => $tactic['steps'] ?? [],
+            'recommended_movement' => $raw['recommended_movement'] ?? $this->movementFromTactic($tactic),
+            'why_this_tactic' => $raw['why_this_tactic'] ?? $this->whyTactic(null, ['checkout_negative_mood'], $tactic),
+            'source' => $source,
+        ];
+    }
+
+    private function decodedCheckoutAnalysis(Activity $activity): array
+    {
+        if (! is_string($activity->checkout_analysis_raw_response) || trim($activity->checkout_analysis_raw_response) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($activity->checkout_analysis_raw_response, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function journalPracticeCodeFor(Activity $activity): string
+    {
+        $dimensions = $this->burnoutDimensions($activity);
+        $mood = $activity->checkout_mood_detected ?: $activity->checkout_mood;
+
+        if ((bool) $activity->checkout_crisis_flag) {
+            return 'grounding_321';
+        }
+
+        if (in_array('kelelahan_emosional', $dimensions, true) || $mood === 'lelah') {
+            return 'body_scan_micro';
+        }
+
+        if ($mood === 'marah') {
+            return 'stop_technique';
+        }
+
+        if ($mood === 'cemas') {
+            return 'breathing_478';
+        }
+
+        if ($mood === 'sedih' || in_array('rendah_pencapaian_diri', $dimensions, true)) {
+            return 'loving_kindness';
+        }
+
+        if ($mood === 'senang') {
+            return 'informal_mindfulness';
+        }
+
+        return 'mindful_breathing';
     }
 
     private function activityBreakdown(Collection $activities): array
@@ -680,6 +947,7 @@ class BurnoutAnalysisService
                     'activity_date' => $activity->activity_date?->toDateString(),
                     'status' => $activity->status,
                     'category_name' => $activity->category,
+                    'activity_kind' => $activity->activity_kind,
                     'start_at' => $activity->start_at?->toIso8601String(),
                     'end_at' => $activity->end_at?->toIso8601String(),
                     'planned_hours' => (float) $activity->planned_hours,
@@ -771,22 +1039,28 @@ class BurnoutAnalysisService
         };
     }
 
-    private function recommendation(?string $category, array $dominantFactors, User $user): array
+    private function recommendation(?string $category, array $dominantFactors, User $user, ?array $tacticCatalog = null): array
     {
         $role = $user->isStudent() ? 'student' : 'teacher';
+        $tacticCatalog ??= $this->mindfulnessTacticCatalog();
 
         if ($category === null) {
             $practiceCode = $this->practiceCodeFor(null, $dominantFactors, $role);
-            $practice = self::PRACTICE_CATALOG[$practiceCode];
+            $practice = $this->tacticForCode($practiceCode, $tacticCatalog);
 
             return [
                 'codes' => ['complete_activity_journal'],
                 'headline' => 'Data belum cukup',
-                'action' => 'Lengkapi check-in, check-out, dan jurnal pasca pada minimal satu aktivitas lalu jalankan analisis ulang.',
-                'practice' => $practice['practice'],
-                'practice_code' => $practiceCode,
+                'action' => $this->actionWithPracticeTitle(
+                    'Lengkapi check-in, check-out, dan jurnal pasca pada minimal satu aktivitas lalu jalankan analisis ulang.',
+                    $practice,
+                ),
+                'practice' => $practice['description'] ?: $practice['practice'],
+                'practice_code' => $practice['code'],
                 'practice_title' => $practice['title'],
                 'dominant_factors' => $dominantFactors,
+                'source' => 'laravel-rule',
+                'tactic' => $practice,
             ];
         }
 
@@ -844,16 +1118,214 @@ class BurnoutAnalysisService
         }
 
         $practiceCode = $this->practiceCodeFor($category, $dominantFactors, $role);
-        $catalogPractice = self::PRACTICE_CATALOG[$practiceCode];
+        $catalogPractice = $this->tacticForCode($practiceCode, $tacticCatalog);
 
         return [
             ...$matrix[$category],
             'codes' => array_values(array_unique($codes)),
-            'action' => $action,
-            'practice' => $catalogPractice['practice'] ?: $practice,
-            'practice_code' => $practiceCode,
+            'action' => $this->actionWithPracticeTitle($action, $catalogPractice),
+            'practice' => $catalogPractice['description'] ?: ($catalogPractice['practice'] ?: $practice),
+            'practice_code' => $catalogPractice['code'],
             'practice_title' => $catalogPractice['title'],
             'dominant_factors' => $dominantFactors,
+            'source' => 'laravel-rule',
+            'tactic' => $catalogPractice,
         ];
+    }
+
+    private function enrichRecommendationWithTactic(array $recommendation, ?string $category, array $dominantFactors, User $user, array $tacticCatalog): array
+    {
+        $role = $user->isStudent() ? 'student' : ($user->isTeacher() ? 'teacher' : 'other');
+        $practiceCode = $recommendation['practice_code'] ?? $this->practiceCodeFor($category, $dominantFactors, $role);
+        $tactic = $this->tacticForCode((string) $practiceCode, $tacticCatalog);
+
+        $recommendation['practice_code'] = $tactic['code'];
+        $recommendation['practice_title'] = $tactic['title'];
+        $recommendation['practice'] = $tactic['description'] ?: ($recommendation['practice'] ?? $tactic['practice']);
+        $recommendation['action'] = $this->actionWithPracticeTitle($recommendation['action'] ?? null, $tactic);
+        $recommendation['tactic'] = $tactic;
+        $recommendation['codes'] = array_values(array_unique([$tactic['code'], ...($recommendation['codes'] ?? [])]));
+        $recommendation['dominant_factors'] = $recommendation['dominant_factors'] ?? $dominantFactors;
+        $recommendation['source'] = $recommendation['source'] ?? 'fastapi-rule';
+        $recommendation['analysis_review'] = $recommendation['analysis_review'] ?? $this->analysisReview($category, $dominantFactors);
+        $recommendation['risk_reduction_steps'] = $recommendation['risk_reduction_steps'] ?? $this->riskReductionSteps($category, $dominantFactors, $role);
+        $recommendation['recommended_movement'] = $recommendation['recommended_movement'] ?? $this->movementFromTactic($tactic);
+        $recommendation['why_this_tactic'] = $recommendation['why_this_tactic'] ?? $this->whyTactic($category, $dominantFactors, $tactic);
+
+        return $recommendation;
+    }
+
+    private function movementFromTactic(array $tactic): string
+    {
+        $steps = collect($tactic['steps'] ?? [])
+            ->filter(fn ($step) => is_string($step) && trim($step) !== '')
+            ->take(3)
+            ->values();
+
+        if ($steps->isNotEmpty()) {
+            return 'Lakukan: '.$steps->implode(' ');
+        }
+
+        return $tactic['description'] ?? $tactic['practice'] ?? 'Ambil jeda napas singkat dengan sadar.';
+    }
+
+    private function actionWithPracticeTitle(?string $action, array $tactic): string
+    {
+        $title = trim((string) ($tactic['title'] ?? 'latihan mindfulness'));
+        $text = trim((string) $action);
+
+        if ($title !== '' && str_contains(mb_strtolower($text), mb_strtolower($title))) {
+            return $text;
+        }
+
+        if ($text !== '') {
+            return "Berdasarkan analisis ini, lakukan {$title} untuk membantu Anda. {$text}";
+        }
+
+        return "Berdasarkan analisis ini, lakukan {$title} untuk membantu menurunkan tekanan dan menata kembali energi.";
+    }
+
+    private function analysisReview(?string $category, array $dominantFactors): string
+    {
+        if ($category === null) {
+            return 'Data jurnal belum cukup, jadi sistem perlu minimal satu check-out lengkap untuk membaca pola tekanan.';
+        }
+
+        if (in_array('crisis_flag', $dominantFactors, true)) {
+            return 'Jurnal memuat sinyal krisis sehingga dukungan manusia perlu diprioritaskan sebelum menambah beban.';
+        }
+
+        if (array_intersect(['journal_pressure_terms', 'checkout_negative_mood'], $dominantFactors) !== []) {
+            return 'Mood atau isi jurnal menunjukkan tekanan yang mulai memengaruhi kondisi setelah aktivitas.';
+        }
+
+        if (array_intersect(['workload_over_capacity', 'dense_workload'], $dominantFactors) !== []) {
+            return 'Beban aktivitas pada periode ini cukup padat dibanding kapasitas pemulihan.';
+        }
+
+        return 'Aktivitas dan jurnal masih relatif terkendali, dengan ruang untuk menjaga jeda pemulihan.';
+    }
+
+    private function riskReductionSteps(?string $category, array $dominantFactors, string $role): array
+    {
+        if ($category === null) {
+            return [
+                'Lengkapi check-in dan check-out pada aktivitas berikutnya.',
+                'Tulis fakta dan perasaan secara singkat agar pola bisa terbaca.',
+            ];
+        }
+
+        if (in_array('crisis_flag', $dominantFactors, true)) {
+            return [
+                'Hubungi orang tepercaya atau pendamping sekolah.',
+                'Kurangi aktivitas tambahan sampai kondisi lebih aman.',
+                'Lakukan grounding singkat sambil ditemani.',
+            ];
+        }
+
+        if ($category === 'merah') {
+            return [
+                'Turunkan prioritas aktivitas yang bisa ditunda.',
+                'Ambil jeda pemulihan sebelum aktivitas berikutnya.',
+                'Minta dukungan guru BK, wali kelas, keluarga, atau rekan kerja.',
+            ];
+        }
+
+        if ($category === 'kuning') {
+            return [
+                'Cari aktivitas yang paling menguras energi.',
+                'Sisipkan jeda napas atau body scan pendek.',
+                'Kurangi multitasking pada aktivitas berikutnya.',
+            ];
+        }
+
+        return $role === 'student'
+            ? ['Pertahankan ritme belajar yang stabil.', 'Gunakan jeda napas singkat sebelum berpindah aktivitas.']
+            : ['Pertahankan jeda transisi antar aktivitas.', 'Gunakan awareness napas sebelum masuk aktivitas berikutnya.'];
+    }
+
+    private function whyTactic(?string $category, array $dominantFactors, array $tactic): string
+    {
+        $title = $tactic['title'] ?? 'Teknik ini';
+
+        if ($category === null) {
+            return "{$title} dipilih sebagai latihan awal yang ringan sambil menunggu data jurnal lebih lengkap.";
+        }
+
+        if (array_intersect(['journal_pressure_terms', 'checkout_negative_mood'], $dominantFactors) !== []) {
+            return "{$title} cocok untuk membantu tubuh turun dari tekanan emosi setelah aktivitas.";
+        }
+
+        if (array_intersect(['workload_over_capacity', 'dense_workload'], $dominantFactors) !== []) {
+            return "{$title} cocok sebagai jeda pemulihan singkat di tengah beban aktivitas yang padat.";
+        }
+
+        return "{$title} cocok untuk menjaga kestabilan perhatian dan energi.";
+    }
+
+    private function mindfulFallbackCatalog(): array
+    {
+        return collect(self::PRACTICE_CATALOG)
+            ->map(fn (array $practice, string $code) => [
+                'id' => null,
+                'code' => $code,
+                'category' => $code,
+                'title' => $practice['title'],
+                'description' => $practice['practice'],
+                'practice' => $practice['practice'],
+                'knowledge' => null,
+                'duration_minutes' => $practice['duration_minutes'] ?? 3,
+                'steps' => $practice['steps'] ?? [],
+                'cues' => [],
+                'best_for' => $practice['best_for'] ?? [],
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function mindfulnessTacticCatalog(): array
+    {
+        try {
+            $tactics = MindfulTactic::query()
+                ->orderBy('sort_order')
+                ->orderBy('title')
+                ->get();
+        } catch (\Throwable) {
+            return $this->mindfulFallbackCatalog();
+        }
+
+        if ($tactics->isEmpty()) {
+            return $this->mindfulFallbackCatalog();
+        }
+
+        return $tactics
+            ->map(fn (MindfulTactic $tactic) => [
+                'id' => $tactic->id,
+                'code' => $tactic->category,
+                'category' => $tactic->category,
+                'title' => $tactic->title,
+                'description' => $tactic->description,
+                'practice' => $tactic->description,
+                'knowledge' => $tactic->knowledge,
+                'duration_minutes' => $tactic->duration_minutes,
+                'steps' => $tactic->steps ?? [],
+                'cues' => $tactic->cues ?? [],
+                'best_for' => $tactic->best_for ?? [],
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function tacticForCode(string $code, array $tacticCatalog): array
+    {
+        $tactic = collect($tacticCatalog)->first(fn (array $item) => ($item['code'] ?? $item['category'] ?? null) === $code);
+
+        if ($tactic) {
+            return $tactic;
+        }
+
+        return collect($this->mindfulFallbackCatalog())
+            ->first(fn (array $item) => ($item['code'] ?? null) === $code)
+            ?? $this->mindfulFallbackCatalog()[0];
     }
 }

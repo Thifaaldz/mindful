@@ -1,13 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../core/account_role.dart';
 import '../core/app_theme.dart';
+import '../core/dashboard_refresh.dart';
+import '../core/session.dart';
 
 class BrandMark extends StatelessWidget {
-  const BrandMark({super.key, this.size = 44, this.radius = 10, this.iconSize});
+  const BrandMark({
+    super.key,
+    this.size = 44,
+    this.radius = 10,
+    this.iconSize,
+    this.backgroundColor,
+    this.iconColor,
+  });
 
   final double size;
   final double radius;
   final double? iconSize;
+  final Color? backgroundColor;
+  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -15,7 +28,7 @@ class BrandMark extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: backgroundColor ?? Colors.white,
         borderRadius: BorderRadius.circular(radius),
         boxShadow: [
           BoxShadow(
@@ -27,7 +40,7 @@ class BrandMark extends StatelessWidget {
       ),
       child: Icon(
         Icons.eco_outlined,
-        color: AppTheme.olive,
+        color: iconColor ?? AppTheme.olive,
         size: iconSize ?? size * 0.55,
       ),
     );
@@ -41,27 +54,33 @@ class BrandHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accountRole = AccountRole.byId(context.watch<Session>().role);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
       child: Row(
         children: [
-          const BrandMark(),
+          BrandMark(iconColor: accountRole.primary),
           const SizedBox(width: 12),
-          const Text(
+          Text(
             'MindfulApp',
             style: TextStyle(
-              color: AppTheme.olive,
+              color: accountRole.primary,
               fontSize: 22,
               fontWeight: FontWeight.w800,
             ),
           ),
           const Spacer(),
-          trailing ??
-              const CircleAvatar(
-                radius: 20,
-                backgroundColor: AppTheme.mint,
-                child: Icon(Icons.person, color: AppTheme.olive),
-              ),
+          if (trailing != null) ...[trailing!, const SizedBox(width: 8)],
+          IconButton.filledTonal(
+            tooltip: 'Profil',
+            onPressed: () => requestProfileTab(accountRole.id),
+            style: IconButton.styleFrom(
+              backgroundColor: accountRole.accent.withValues(alpha: 0.38),
+              foregroundColor: accountRole.primary,
+            ),
+            icon: const Icon(Icons.person),
+          ),
         ],
       ),
     );

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'account_role.dart';
+
 class AppTheme {
   static const ink = Color(0xFF141414);
   static const paper = Color(0xFFFCFCFB);
@@ -10,27 +12,32 @@ class AppTheme {
   static const muted = Color(0xFF61635F);
   static const line = Color(0xFFE9ECE8);
 
-  static ThemeData get light {
+  static ThemeData get light => forRole();
+
+  static ThemeData forRole([AccountRole role = AccountRole.teacher]) {
+    final primary = role.primary;
+    final accent = role.accent;
+    final roleSurface = role.surface;
     final scheme = ColorScheme.fromSeed(
-      seedColor: olive,
+      seedColor: primary,
       brightness: Brightness.light,
       primary: ink,
-      secondary: moss,
+      secondary: primary,
       surface: surface,
     );
 
     return ThemeData(
       colorScheme: scheme,
       useMaterial3: true,
-      scaffoldBackgroundColor: paper,
+      scaffoldBackgroundColor: roleSurface,
       fontFamily: 'Roboto',
-      appBarTheme: const AppBarTheme(
-        backgroundColor: paper,
-        foregroundColor: ink,
+      appBarTheme: AppBarTheme(
+        backgroundColor: roleSurface,
+        foregroundColor: primary,
         elevation: 0,
         centerTitle: false,
         titleTextStyle: TextStyle(
-          color: ink,
+          color: primary,
           fontSize: 22,
           fontWeight: FontWeight.w800,
         ),
@@ -48,10 +55,10 @@ class AppTheme {
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: surface,
         elevation: 0,
-        indicatorColor: mint,
+        indicatorColor: accent.withValues(alpha: 0.34),
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
-            color: states.contains(WidgetState.selected) ? olive : muted,
+            color: states.contains(WidgetState.selected) ? primary : muted,
             fontSize: 12,
             fontWeight: states.contains(WidgetState.selected)
                 ? FontWeight.w700
@@ -72,12 +79,12 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: olive, width: 1.3),
+          borderSide: BorderSide(color: primary, width: 1.3),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: olive,
+          backgroundColor: primary,
           foregroundColor: Colors.white,
           minimumSize: const Size(0, 48),
           shape: RoundedRectangleBorder(
@@ -88,7 +95,7 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: olive,
+          foregroundColor: primary,
           side: const BorderSide(color: line),
           minimumSize: const Size(0, 48),
           shape: RoundedRectangleBorder(
@@ -98,11 +105,11 @@ class AppTheme {
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: olive),
+        style: TextButton.styleFrom(foregroundColor: primary),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: const Color(0xFFF4F5F3),
-        selectedColor: mint,
+        selectedColor: accent.withValues(alpha: 0.36),
         side: const BorderSide(color: line),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/account_role.dart';
 import '../../core/api.dart';
 import '../../core/api_client.dart';
 import '../../core/app_theme.dart';
@@ -12,6 +13,7 @@ import '../../core/reminder_service.dart';
 import '../../core/session.dart';
 import '../../widgets/app_chrome.dart';
 import 'burnout_analysis_screen.dart';
+import 'kabat_zinn_practice_screen.dart';
 
 class ActivityHomeScreen extends StatefulWidget {
   const ActivityHomeScreen({super.key});
@@ -213,6 +215,31 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
     if (analyzed == true && mounted) {
       _reload();
     }
+  }
+
+  Future<void> _joinClassroom() async {
+    final joined = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _JoinClassroomSheet(date: _dateParam),
+    );
+    if (joined == null) return;
+
+    final activity = _jsonMap(joined['activity']);
+    if (activity.isNotEmpty) {
+      _applyActivities([activity]);
+      requestAnalysisRefresh();
+      _reload(background: true);
+    }
+  }
+
+  Future<void> _observeClassroom(Map<String, dynamic> activity) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) =>
+          _ClassroomObservationSheet(activityId: activity['id'] as int),
+    );
   }
 
   Future<void> _cancel(Map<String, dynamic> activity) async {
@@ -514,6 +541,8 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
                 ? _visibleSummary
                 : _jsonMap(data['summary']);
             final latestAnalysis = _jsonMap(data['latest_analysis']);
+            final session = context.watch<Session>();
+            final accountRole = AccountRole.byId(session.role);
 
             return RefreshIndicator(
               onRefresh: () async {
@@ -575,11 +604,21 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
                         ),
                         const SizedBox(height: 18),
                         _LedgerHero(
+                          role: accountRole,
                           onAdd: () => _openActivityForm(),
                           onAnalyze: loading ? null : _analyze,
                         ),
+                        if (session.isStudent) ...[
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: _joinClassroom,
+                            icon: const Icon(Icons.groups_outlined),
+                            label: const Text('Cari kelas dari guru'),
+                          ),
+                        ],
                         const SizedBox(height: 18),
                         _ActivityStats(
+                          role: accountRole,
                           summary: summary,
                           latestAnalysis: latestAnalysis,
                         ),
@@ -624,6 +663,11 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
                                     _openActivityForm(activity: activity),
                                 onCancel: () => _cancel(activity),
                                 onDuplicate: () => _duplicate(activity),
+                                onObserve:
+                                    session.isTeacher &&
+                                        activity['activity_type'] == 'classroom'
+                                    ? () => _observeClassroom(activity)
+                                    : null,
                               ),
                             );
                           }),
@@ -641,8 +685,13 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
 }
 
 class _LedgerHero extends StatelessWidget {
-  const _LedgerHero({required this.onAdd, required this.onAnalyze});
+  const _LedgerHero({
+    required this.role,
+    required this.onAdd,
+    required this.onAnalyze,
+  });
 
+  final AccountRole role;
   final VoidCallback? onAdd;
   final VoidCallback? onAnalyze;
 
@@ -651,11 +700,11 @@ class _LedgerHero extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppTheme.olive,
+        color: role.primary,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.olive.withValues(alpha: 0.20),
+            color: role.primary.withValues(alpha: 0.20),
             blurRadius: 24,
             offset: const Offset(0, 12),
           ),
@@ -710,8 +759,13 @@ class _LedgerHero extends StatelessWidget {
 }
 
 class _ActivityStats extends StatelessWidget {
-  const _ActivityStats({required this.summary, required this.latestAnalysis});
+  const _ActivityStats({
+    required this.role,
+    required this.summary,
+    required this.latestAnalysis,
+  });
 
+  final AccountRole role;
   final Map<String, dynamic> summary;
   final Map<String, dynamic> latestAnalysis;
 
@@ -726,6 +780,7 @@ class _ActivityStats extends StatelessWidget {
             label: 'Planned',
             value: '${summary['planned'] ?? 0}',
             caption: 'activity',
+            color: role.primary,
           ),
         ),
         const SizedBox(width: 10),
@@ -776,6 +831,7 @@ class _ActivityCard extends StatelessWidget {
     required this.onEdit,
     required this.onCancel,
     required this.onDuplicate,
+    this.onObserve,
   });
 
   final Map<String, dynamic> activity;
@@ -784,25 +840,95 @@ class _ActivityCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onCancel;
   final VoidCallback onDuplicate;
+  final VoidCallback? onObserve;
 
   @override
   Widget build(BuildContext context) {
-    final categoryText = '${activity['category'] ?? ''}'.trim();
+    final role = AccountRole.byId(context.watch<Session>().role);
+    final kindText = _activityKindLabel(
+      '${activity['activity_kind'] ?? activity['category'] ?? ''}'.trim(),
+    );
     final timeText = _activityTimeRange(activity);
     final status = '${activity['status'] ?? 'planned'}';
-    final canCheckIn = activity['checkin_at'] == null && status != 'cancelled';
+    final isStudentClassroom = _isStudentClassroomActivity(activity);
+    final gate = _jsonMap(activity['classroom_gate']);
+    final teacherCheckinReady =
+        !isStudentClassroom || gate['teacher_checkin_available'] == true;
+    final teacherCheckoutReady =
+        !isStudentClassroom || gate['teacher_checkout_available'] == true;
+    final gateMessage = '${gate['message'] ?? ''}'.trim();
+    final canCheckIn =
+        activity['checkin_at'] == null &&
+        status != 'cancelled' &&
+        teacherCheckinReady;
     final canCheckOut =
         activity['checkin_at'] != null &&
         activity['checkout_at'] == null &&
-        status != 'cancelled';
+        status != 'cancelled' &&
+        teacherCheckoutReady;
     final detectedMood = '${activity['checkout_mood_detected'] ?? ''}'.trim();
     final suggestion = '${activity['checkout_suggestion'] ?? ''}'.trim();
+    final recommendedTactic = _jsonMap(activity['recommended_tactic']);
     final crisis = activity['checkout_crisis_flag'] == true;
     final burnoutDimensions =
         (activity['checkout_auto_burnout_tags'] as List? ?? [])
             .map((item) => '$item')
             .where((item) => item.isNotEmpty)
             .toList();
+    final hasAiReview = suggestion.isNotEmpty || recommendedTactic.isNotEmpty;
+
+    void openActivityAnalysis() {
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('${activity['title'] ?? 'Review AI'}'),
+          scrollable: true,
+          content: _ActivityAnalysisDialogContent(
+            activity: activity,
+            suggestion: suggestion,
+            recommendedTactic: recommendedTactic,
+          ),
+          actions: [
+            TextButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              icon: const Icon(Icons.close),
+              label: const Text('Tutup'),
+            ),
+            if (recommendedTactic.isNotEmpty)
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => KabatZinnPracticeScreen(
+                        snapshot: {
+                          'source': 'activity_review',
+                          'category': _categoryFromActivity(activity),
+                          'recommendation_summary': {
+                            'practice_code': recommendedTactic['code'],
+                            'practice_title': recommendedTactic['title'],
+                            'practice':
+                                recommendedTactic['description'] ??
+                                recommendedTactic['practice'],
+                            'recommended_movement':
+                                recommendedTactic['recommended_movement'],
+                            'why_this_tactic':
+                                recommendedTactic['why_this_tactic'],
+                            'tactic': recommendedTactic,
+                          },
+                          'tactic': recommendedTactic,
+                        },
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.self_improvement),
+                label: const Text('Buka Teknik'),
+              ),
+          ],
+        ),
+      );
+    }
 
     return SoftCard(
       child: Column(
@@ -814,13 +940,10 @@ class _ActivityCard extends StatelessWidget {
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(
-                  color: AppTheme.olive.withValues(alpha: 0.12),
+                  color: role.accent.withValues(alpha: 0.30),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(
-                  Icons.event_note_outlined,
-                  color: AppTheme.olive,
-                ),
+                child: Icon(Icons.event_note_outlined, color: role.primary),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -833,7 +956,7 @@ class _ActivityCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${categoryText.isEmpty ? 'Kegiatan' : categoryText} - ${timeText.isEmpty ? 'Sepanjang hari' : timeText}',
+                      '${kindText.isEmpty ? 'Kegiatan' : kindText} - ${timeText.isEmpty ? 'Sepanjang hari' : timeText}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
@@ -860,7 +983,9 @@ class _ActivityCard extends StatelessWidget {
             children: [
               StatusPill(
                 label: _statusLabel(status),
-                color: _statusColor(status),
+                color: status == 'planned'
+                    ? role.primary
+                    : _statusColor(status),
               ),
               StatusPill(
                 label: '${activity['planned_hours'] ?? 0} planned h',
@@ -871,10 +996,19 @@ class _ActivityCard extends StatelessWidget {
                   label: '${activity['actual_hours']} actual h',
                   color: const Color(0xFF24718E),
                 ),
+              if (isStudentClassroom && gateMessage.isNotEmpty)
+                StatusPill(
+                  label: teacherCheckoutReady
+                      ? 'Guru selesai'
+                      : teacherCheckinReady
+                      ? 'Guru sudah check-in'
+                      : 'Menunggu guru',
+                  color: teacherCheckinReady ? role.primary : AppTheme.muted,
+                ),
               if (detectedMood.isNotEmpty)
                 StatusPill(
                   label: 'Terdeteksi: $detectedMood',
-                  color: AppTheme.olive,
+                  color: role.primary,
                 ),
               if (crisis)
                 StatusPill(
@@ -889,16 +1023,37 @@ class _ActivityCard extends StatelessWidget {
               ),
             ],
           ),
-          if (suggestion.isNotEmpty) ...[
+          if (hasAiReview) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: openActivityAnalysis,
+              icon: const Icon(Icons.auto_awesome),
+              label: const Text('Review AI'),
+            ),
+          ],
+          if (isStudentClassroom &&
+              ((!teacherCheckinReady && activity['checkin_at'] == null) ||
+                  (!teacherCheckoutReady &&
+                      activity['checkin_at'] != null))) ...[
             const SizedBox(height: 10),
             Text(
-              suggestion,
+              !teacherCheckinReady
+                  ? 'Check-in siswa akan terbuka setelah guru check-in.'
+                  : 'Check-out siswa akan terbuka setelah guru check-out.',
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: AppTheme.muted),
             ),
           ],
           const SizedBox(height: 14),
+          if (onObserve != null) ...[
+            OutlinedButton.icon(
+              onPressed: onObserve,
+              icon: const Icon(Icons.visibility_outlined),
+              label: const Text('Observasi siswa'),
+            ),
+            const SizedBox(height: 10),
+          ],
           Row(
             children: [
               Expanded(
@@ -924,8 +1079,141 @@ class _ActivityCard extends StatelessWidget {
   }
 }
 
+class _ActivityAnalysisDialogContent extends StatelessWidget {
+  const _ActivityAnalysisDialogContent({
+    required this.activity,
+    required this.suggestion,
+    required this.recommendedTactic,
+  });
+
+  final Map<String, dynamic> activity;
+  final String suggestion;
+  final Map<String, dynamic> recommendedTactic;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.secondary;
+    final tacticTitle = '${recommendedTactic['title'] ?? ''}'.trim();
+    final tacticDescription =
+        '${recommendedTactic['description'] ?? recommendedTactic['practice'] ?? ''}'
+            .trim();
+    final tacticReason = '${recommendedTactic['why_this_tactic'] ?? ''}'.trim();
+    final movement = '${recommendedTactic['recommended_movement'] ?? ''}'
+        .trim();
+    final source = '${activity['checkout_analysis_source'] ?? ''}'.trim();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if ('${activity['checkout_mood_detected'] ?? ''}'.isNotEmpty)
+              StatusPill(
+                label: 'Mood: ${activity['checkout_mood_detected']}',
+                color: primary,
+              ),
+            if (source.isNotEmpty)
+              StatusPill(
+                label: source == 'gemini' ? 'Gemini AI' : 'Lokal',
+                color: source == 'gemini'
+                    ? const Color(0xFF24718E)
+                    : AppTheme.muted,
+              ),
+          ],
+        ),
+        if (suggestion.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(suggestion),
+        ],
+        if (recommendedTactic.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: primary.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.line),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.self_improvement, color: primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (tacticTitle.isNotEmpty)
+                        Text(
+                          tacticTitle,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                      if (tacticDescription.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(tacticDescription),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (tacticReason.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _ActivityDialogLine(
+              icon: Icons.lightbulb_outline,
+              text: tacticReason,
+            ),
+          ],
+          if (movement.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _ActivityDialogLine(icon: Icons.accessibility_new, text: movement),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
+class _ActivityDialogLine extends StatelessWidget {
+  const _ActivityDialogLine({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.secondary;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: primary),
+        const SizedBox(width: 8),
+        Expanded(child: Text(text)),
+      ],
+    );
+  }
+}
+
 String _burnoutDimensionLabel(String dimension) {
   return _burnoutDimensionLabels[dimension] ?? dimension;
+}
+
+String _categoryFromActivity(Map<String, dynamic> activity) {
+  if (activity['checkout_crisis_flag'] == true) return 'merah';
+
+  final mood =
+      '${activity['checkout_mood_detected'] ?? activity['checkout_mood'] ?? ''}';
+  if (const {'cemas', 'sedih', 'marah', 'lelah'}.contains(mood)) {
+    return 'kuning';
+  }
+
+  return 'hijau';
 }
 
 String _conditionLabel(String category) {
@@ -946,6 +1234,289 @@ String _categoryLabel(String category) {
   };
 }
 
+bool _isStudentClassroomActivity(Map<String, dynamic> activity) {
+  return activity['teacher_activity_id'] != null ||
+      activity['activity_type'] == 'classroom_student';
+}
+
+class _JoinClassroomSheet extends StatefulWidget {
+  const _JoinClassroomSheet({required this.date});
+
+  final String date;
+
+  @override
+  State<_JoinClassroomSheet> createState() => _JoinClassroomSheetState();
+}
+
+class _JoinClassroomSheetState extends State<_JoinClassroomSheet> {
+  late Future<Map<String, dynamic>> _future;
+  int? _joiningId;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = Api.availableClassroomActivities(date: widget.date);
+  }
+
+  Future<void> _join(int id) async {
+    setState(() {
+      _joiningId = id;
+      _error = null;
+    });
+
+    try {
+      final result = await Api.joinClassroomActivity(id);
+      if (mounted) Navigator.of(context).pop(result);
+    } on ApiException catch (e) {
+      setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _joiningId = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final role = AccountRole.byId(context.watch<Session>().role);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        18,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: _future,
+        builder: (context, snapshot) {
+          final activities =
+              (_jsonMap(snapshot.data)['activities'] as List? ?? [])
+                  .cast<dynamic>();
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Cari Kelas', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              if (snapshot.connectionState == ConnectionState.waiting)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 28),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (snapshot.hasError)
+                Text(
+                  snapshot.error is ApiException
+                      ? (snapshot.error as ApiException).message
+                      : '${snapshot.error}',
+                  style: const TextStyle(color: Colors.red),
+                )
+              else if (activities.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Text(
+                    'Belum ada kelas terbuka pada tanggal ini.',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: AppTheme.muted),
+                  ),
+                )
+              else
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: activities.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final activity = _jsonMap(activities[index]);
+                      final teacher = _jsonMap(activity['teacher']);
+                      final schoolClass = _jsonMap(activity['class']);
+                      final id = activity['id'] as int;
+                      final joining = _joiningId == id;
+                      final className =
+                          '${schoolClass['name'] ?? 'Semua siswa sekolah'}';
+
+                      return Card(
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: role.accent.withValues(
+                              alpha: 0.30,
+                            ),
+                            child: Icon(Icons.groups, color: role.primary),
+                          ),
+                          title: Text('${activity['title'] ?? 'Kelas'}'),
+                          subtitle: Text(
+                            '${teacher['name'] ?? '-'} - $className',
+                          ),
+                          trailing: joining
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.add_circle_outline),
+                          onTap: joining ? null : () => _join(id),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(_error!, style: const TextStyle(color: Colors.red)),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ClassroomObservationSheet extends StatelessWidget {
+  const _ClassroomObservationSheet({required this.activityId});
+
+  final int activityId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        18,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: Api.classroomObservations(activityId),
+        builder: (context, snapshot) {
+          final students = (_jsonMap(snapshot.data)['students'] as List? ?? [])
+              .cast<dynamic>();
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Observasi Siswa',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              if (snapshot.connectionState == ConnectionState.waiting)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 28),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (snapshot.hasError)
+                Text(
+                  snapshot.error is ApiException
+                      ? (snapshot.error as ApiException).message
+                      : '${snapshot.error}',
+                  style: const TextStyle(color: Colors.red),
+                )
+              else if (students.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Text(
+                    'Belum ada siswa yang join activity ini.',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: AppTheme.muted),
+                  ),
+                )
+              else
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: students.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final row = _jsonMap(students[index]);
+                      final student = _jsonMap(row['student']);
+                      final checkin = _jsonMap(row['checkin']);
+                      final checkout = _jsonMap(row['checkout']);
+                      final analysis = _jsonMap(row['burnout_analysis']);
+                      final recommendation = _jsonMap(
+                        analysis['recommendation'] ??
+                            analysis['recommendation_summary'],
+                      );
+                      final category = '${analysis['category'] ?? 'belum'}';
+
+                      return Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '${student['name'] ?? 'Siswa'}',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleMedium,
+                                    ),
+                                  ),
+                                  StatusPill(
+                                    label: _categoryLabel(category),
+                                    color: _categoryColor(category),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  StatusPill(
+                                    label: 'In: ${checkin['mood'] ?? '-'}',
+                                    color: AppTheme.olive,
+                                  ),
+                                  StatusPill(
+                                    label: 'Out: ${checkout['mood'] ?? '-'}',
+                                    color: AppTheme.muted,
+                                  ),
+                                  if (checkout['mood_detected'] != null)
+                                    StatusPill(
+                                      label: 'AI: ${checkout['mood_detected']}',
+                                      color: const Color(0xFF24718E),
+                                    ),
+                                ],
+                              ),
+                              if ('${recommendation['headline'] ?? ''}'
+                                  .isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                Text(
+                                  '${recommendation['headline']}',
+                                  style: Theme.of(context).textTheme.titleSmall,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${recommendation['action'] ?? ''}',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(color: AppTheme.muted),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _ActivityFormSheet extends StatefulWidget {
   const _ActivityFormSheet({
     required this.selectedDate,
@@ -963,11 +1534,13 @@ class _ActivityFormSheet extends StatefulWidget {
 
 class _ActivityFormSheetState extends State<_ActivityFormSheet> {
   late final TextEditingController _titleController;
-  late final TextEditingController _categoryController;
+  late final TextEditingController _customKindController;
+  late final TextEditingController _schoolClassController;
   late DateTime _date;
   late DateTime _repeatUntil;
   TimeOfDay? _start;
   TimeOfDay? _end;
+  String _activityKind = '';
   String _repeatType = 'none';
   bool _saving = false;
 
@@ -981,8 +1554,13 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
     _titleController = TextEditingController(
       text: '${activity?['title'] ?? ''}',
     );
-    _categoryController = TextEditingController(
-      text: '${activity?['category'] ?? ''}',
+    final initialKind = '${activity?['activity_kind'] ?? ''}';
+    _activityKind = initialKind.isEmpty ? '' : _knownOrOtherKind(initialKind);
+    _customKindController = TextEditingController(
+      text: _activityKind == 'other' ? initialKind : '',
+    );
+    _schoolClassController = TextEditingController(
+      text: '${(activity?['class'] as Map?)?['name'] ?? ''}',
     );
     _date = activity == null
         ? widget.selectedDate
@@ -995,12 +1573,19 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
   @override
   void dispose() {
     _titleController.dispose();
-    _categoryController.dispose();
+    _customKindController.dispose();
+    _schoolClassController.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
     if (_titleController.text.trim().isEmpty) return;
+    if (_activityKind == 'other' && _customKindController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Isi jenis aktivitas lainnya.')),
+      );
+      return;
+    }
     if (_start != null &&
         _end != null &&
         _minutes(_end!) <= _minutes(_start!)) {
@@ -1019,7 +1604,10 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
           activityDate: optimistic['activity_date'] as String,
           startTime: _apiTime(_start),
           endTime: _apiTime(_end),
-          category: _emptyToNull(_categoryController.text),
+          category: null,
+          activityKind: _selectedActivityKindLabel(),
+          activityType: _selectedActivityType(),
+          schoolClassName: _classroomClassName(),
         );
         if (mounted) {
           Navigator.of(context).pop(
@@ -1039,7 +1627,10 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
           activityDate: DateFormat('yyyy-MM-dd').format(_date),
           startTime: _apiTime(_start),
           endTime: _apiTime(_end),
-          category: _emptyToNull(_categoryController.text),
+          category: null,
+          activityKind: _selectedActivityKindLabel(),
+          activityType: _selectedActivityType(),
+          schoolClassName: _classroomClassName(),
           repeatType: _repeatType,
           repeatUntil: _repeating
               ? DateFormat('yyyy-MM-dd').format(_repeatUntil)
@@ -1094,11 +1685,17 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
     final dateText = DateFormat('yyyy-MM-dd').format(date);
     final startAt = _dateTimeFor(date, _start);
     final endAt = _dateTimeFor(date, _end);
-    final category = _emptyToNull(_categoryController.text);
+    final category = null;
+    final kind = _selectedActivityKindLabel();
+    final type = _selectedActivityType();
+    final schoolClassName = _classroomClassName();
 
     return {
       'title': _titleController.text.trim(),
       'category': category,
+      'activity_kind': kind,
+      'activity_type': type,
+      'class': schoolClassName == null ? null : {'name': schoolClassName},
       'activity_date': dateText,
       'start_at': startAt?.toIso8601String(),
       'end_at': endAt?.toIso8601String(),
@@ -1112,6 +1709,30 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
         category,
       ),
     };
+  }
+
+  String? _selectedActivityKindLabel() {
+    final role = context.read<Session>().role;
+    if (_activityKind == 'other') {
+      return _emptyToNull(_customKindController.text);
+    }
+
+    final options = _activityKindOptions(role);
+    return options
+        .where((option) => option.value == _activityKind)
+        .map((option) => option.label)
+        .firstOrNull;
+  }
+
+  String _selectedActivityType() {
+    final isTeacher = context.read<Session>().isTeacher;
+    return isTeacher && _activityKind == 'teaching' ? 'classroom' : 'personal';
+  }
+
+  String? _classroomClassName() {
+    if (_selectedActivityType() != 'classroom') return null;
+
+    return _emptyToNull(_schoolClassController.text);
   }
 
   Future<void> _pickTime(bool start) async {
@@ -1183,6 +1804,14 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final session = context.watch<Session>();
+    final isTeacher = session.isTeacher;
+    final kindOptions = _activityKindOptions(session.role);
+    final role = AccountRole.byId(session.role);
+    if (_activityKind.isEmpty && kindOptions.isNotEmpty) {
+      _activityKind = kindOptions.first.value;
+    }
+
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
@@ -1286,13 +1915,54 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
               ],
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _categoryController,
-              decoration: const InputDecoration(
-                labelText: 'Kategori (opsional)',
-                hintText: 'Contoh: belajar, ekskul, istirahat',
-              ),
+            DropdownButtonFormField<String>(
+              initialValue: _activityKind,
+              decoration: const InputDecoration(labelText: 'Jenis aktivitas'),
+              items: kindOptions
+                  .map(
+                    (option) => DropdownMenuItem(
+                      value: option.value,
+                      child: Text(option.label),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _activityKind = value);
+              },
             ),
+            if (_activityKind == 'other') ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _customKindController,
+                decoration: const InputDecoration(
+                  labelText: 'Jenis aktivitas lainnya',
+                  hintText: 'Tulis aktivitasmu',
+                ),
+                textCapitalization: TextCapitalization.words,
+              ),
+            ],
+            if (isTeacher && _activityKind == 'teaching') ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _schoolClassController,
+                decoration: const InputDecoration(
+                  labelText: 'Target kelas',
+                  hintText: 'Kosongkan untuk seluruh siswa sekolah',
+                ),
+                onChanged: (_) => setState(() {}),
+                textCapitalization: TextCapitalization.characters,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _schoolClassController.text.trim().isEmpty
+                    ? 'Kelas terbuka untuk semua siswa di sekolah Anda.'
+                    : 'Hanya siswa di kelas ini yang bisa join.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: role.primary),
+              ),
+            ],
             const SizedBox(height: 18),
             FilledButton(
               onPressed: _saving ? null : _save,
@@ -1734,6 +2404,8 @@ class _MoodChoiceGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.secondary;
+
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -1747,10 +2419,12 @@ class _MoodChoiceGrid extends StatelessWidget {
             width: 76,
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
             decoration: BoxDecoration(
-              color: isSelected ? AppTheme.mint : AppTheme.surface,
+              color: isSelected
+                  ? primary.withValues(alpha: 0.12)
+                  : AppTheme.surface,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: isSelected ? AppTheme.olive : AppTheme.line,
+                color: isSelected ? primary : AppTheme.line,
                 width: isSelected ? 1.5 : 1,
               ),
             ),
@@ -1765,7 +2439,7 @@ class _MoodChoiceGrid extends StatelessWidget {
                     option.label,
                     maxLines: 1,
                     style: TextStyle(
-                      color: isSelected ? AppTheme.olive : AppTheme.ink,
+                      color: isSelected ? primary : AppTheme.ink,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                     ),
@@ -1787,12 +2461,14 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.secondary;
+
     return Padding(
       padding: const EdgeInsets.only(top: 18),
       child: SoftCard(
         child: Row(
           children: [
-            const Icon(Icons.info_outline, color: AppTheme.olive),
+            Icon(Icons.info_outline, color: primary),
             const SizedBox(width: 12),
             Expanded(child: Text(message)),
           ],
@@ -1889,6 +2565,7 @@ String _activityFingerprint(Map<String, dynamic> activity) {
   return [
     _activityDateKey(activity['activity_date']),
     '${activity['title'] ?? ''}'.trim().toLowerCase(),
+    '${activity['activity_kind'] ?? ''}'.trim().toLowerCase(),
     _timeFingerprint(activity['start_at']),
     _timeFingerprint(activity['end_at']),
   ].join('|');
@@ -1968,6 +2645,57 @@ int _minutes(TimeOfDay value) => value.hour * 60 + value.minute;
 String? _emptyToNull(String value) {
   final trimmed = value.trim();
   return trimmed.isEmpty ? null : trimmed;
+}
+
+String _knownOrOtherKind(String value) {
+  final normalized = value.trim().toLowerCase();
+  for (final option in [..._teacherActivityKinds, ..._studentActivityKinds]) {
+    if (option.label.toLowerCase() == normalized) {
+      return option.value;
+    }
+  }
+  return 'other';
+}
+
+String _activityKindLabel(String value) {
+  if (value.isEmpty) return '';
+  final kind = _knownOrOtherKind(value);
+  if (kind == 'other') return value;
+  for (final option in [..._teacherActivityKinds, ..._studentActivityKinds]) {
+    if (option.value == kind) return option.label;
+  }
+  return value;
+}
+
+List<_ActivityKindOption> _activityKindOptions(String? role) {
+  return role == 'student' ? _studentActivityKinds : _teacherActivityKinds;
+}
+
+const _teacherActivityKinds = [
+  _ActivityKindOption('teaching', 'Mengajar'),
+  _ActivityKindOption('meeting', 'Rapat'),
+  _ActivityKindOption('administration', 'Administrasi'),
+  _ActivityKindOption('grading', 'Koreksi'),
+  _ActivityKindOption('preparation', 'Persiapan materi'),
+  _ActivityKindOption('break', 'Istirahat'),
+  _ActivityKindOption('other', 'Lainnya'),
+];
+
+const _studentActivityKinds = [
+  _ActivityKindOption('class_learning', 'Belajar di kelas'),
+  _ActivityKindOption('group_study', 'Belajar bersama'),
+  _ActivityKindOption('assignment', 'Tugas/PR'),
+  _ActivityKindOption('exam', 'Ujian/Ulangan'),
+  _ActivityKindOption('extracurricular', 'Ekstrakurikuler'),
+  _ActivityKindOption('break', 'Istirahat'),
+  _ActivityKindOption('other', 'Lainnya'),
+];
+
+class _ActivityKindOption {
+  const _ActivityKindOption(this.value, this.label);
+
+  final String value;
+  final String label;
 }
 
 DateTime? _dateTimeFor(DateTime date, TimeOfDay? time) {
