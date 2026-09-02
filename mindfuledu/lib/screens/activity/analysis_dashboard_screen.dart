@@ -1867,7 +1867,7 @@ String _reviewDateLabel(dynamic date) {
 }
 
 String _sourceLabel(String source) {
-  return _isAiSource(source) ? 'Gemini AI' : 'Lokal';
+  return _isAiSource(source) ? 'Berbasis AI' : 'Lokal';
 }
 
 String _categoryFromReview(Map<String, dynamic> review) {

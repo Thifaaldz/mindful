@@ -43,8 +43,11 @@ class LatestJournalReviewsWidget extends BaseWidget
                         'danger' => ['marah'],
                     ]),
                 Tables\Columns\TextColumn::make('checkout_analysis_source')
-                    ->label('Source')
+                    ->label('Tipe Analisis')
                     ->badge()
+                    ->formatStateUsing(
+                        fn (?string $state) => in_array($state, ['gemini', 'fastapi'], true) ? 'Berbasis AI' : 'Lokal'
+                    )
                     ->colors([
                         'success' => ['gemini', 'fastapi'],
                         'gray' => ['php-fallback', 'mock'],

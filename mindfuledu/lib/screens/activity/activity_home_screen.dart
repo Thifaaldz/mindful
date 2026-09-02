@@ -1117,7 +1117,7 @@ class _ActivityAnalysisDialogContent extends StatelessWidget {
               ),
             if (source.isNotEmpty)
               StatusPill(
-                label: source == 'gemini' ? 'Gemini AI' : 'Lokal',
+                label: source == 'gemini' ? 'Berbasis AI' : 'Lokal',
                 color: source == 'gemini'
                     ? const Color(0xFF24718E)
                     : AppTheme.muted,

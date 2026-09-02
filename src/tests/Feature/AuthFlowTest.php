@@ -70,3 +70,35 @@ test('google login creates account from verified id token', function () {
     expect($user->google_id)->toBe('google-user-123')
         ->and($user->email_verified_at)->not->toBeNull();
 });
+
+test('same account can stay logged in on multiple devices', function () {
+    $user = User::factory()->create([
+        'email' => 'guru@mindfuledu.test',
+    ]);
+    $user->assignRole('teacher');
+
+    $firstLogin = $this->postJson('/api/login', [
+        'email' => 'guru@mindfuledu.test',
+        'password' => 'password',
+        'role' => 'teacher',
+    ])->assertOk();
+
+    $secondLogin = $this->postJson('/api/login', [
+        'email' => 'guru@mindfuledu.test',
+        'password' => 'password',
+        'role' => 'teacher',
+    ])->assertOk();
+
+    expect($firstLogin->json('token'))->not->toBe($secondLogin->json('token'))
+        ->and($user->tokens()->count())->toBe(2);
+
+    $this->withToken($firstLogin->json('token'))
+        ->getJson('/api/me')
+        ->assertOk()
+        ->assertJsonPath('user.email', 'guru@mindfuledu.test');
+
+    $this->withToken($secondLogin->json('token'))
+        ->getJson('/api/me')
+        ->assertOk()
+        ->assertJsonPath('user.email', 'guru@mindfuledu.test');
+});

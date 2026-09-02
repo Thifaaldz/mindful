@@ -756,7 +756,7 @@
                         <li>Guru</li>
                         <li>Siswa</li>
                         <li>Orang tua</li>
-                        <li>Gemini AI</li>
+                        <li>Berbasis AI</li>
                     </ul>
                     <h1>MindfulEdu</h1>
                     <p>
@@ -830,7 +830,7 @@
                     </article>
                     <article class="feature">
                         <div class="feature-icon">03</div>
-                        <h3>Review AI Gemini</h3>
+                        <h3>Review Berbasis AI</h3>
                         <p>Review jurnal menyimpan hasil AI dan memilih teknik mindfulness dari daftar teknik yang tersedia.</p>
                     </article>
                     <article class="feature">
@@ -934,7 +934,7 @@
                         <h2>Informasi aplikasi</h2>
                         <p>
                             MindfulEdu tersedia sebagai aplikasi Android untuk guru, siswa, dan orang tua, dengan backend web
-                            sebagai pusat API, autentikasi, data kelas, Gemini AI, observasi, dan konfigurasi sistem.
+                            sebagai pusat API, autentikasi, data kelas, analisis berbasis AI, observasi, dan konfigurasi sistem.
                         </p>
                     </div>
                     <ul>
