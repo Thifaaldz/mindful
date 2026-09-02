@@ -634,6 +634,8 @@ class _JournalReviewTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.secondary;
+    final condition = '${review['condition'] ?? _categoryFromReview(review)}';
+    final score = review['score'];
 
     void openReview() {
       showDialog<void>(
@@ -679,6 +681,13 @@ class _JournalReviewTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
+              StatusPill(
+                label: score == null
+                    ? _categoryLabel(condition)
+                    : '${_categoryLabel(condition)} $score',
+                color: _categoryColor(condition),
+              ),
+              const SizedBox(width: 8),
               const Icon(Icons.open_in_new, color: AppTheme.muted, size: 20),
             ],
           ),
@@ -697,6 +706,8 @@ class _JournalReviewDialogContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.secondary;
     final mood = '${review['mood_detected'] ?? review['mood'] ?? ''}'.trim();
+    final condition = '${review['condition'] ?? _categoryFromReview(review)}';
+    final score = review['score'];
     final suggestion = '${review['suggestion'] ?? ''}'.trim();
     final fact = '${review['fact'] ?? ''}'.trim();
     final feeling = '${review['feeling'] ?? ''}'.trim();
@@ -750,6 +761,12 @@ class _JournalReviewDialogContent extends StatelessWidget {
           children: [
             if (mood.isNotEmpty)
               StatusPill(label: 'Mood: $mood', color: primary),
+            StatusPill(
+              label: score == null
+                  ? _categoryLabel(condition)
+                  : '${_categoryLabel(condition)} $score',
+              color: _categoryColor(condition),
+            ),
             _AnalysisSourceBadge(source: source),
             Text(
               meta,
@@ -1095,25 +1112,14 @@ class _RecommendationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final recommendation = _jsonMap(snapshot['recommendation_summary']);
-    final category = '${snapshot['category'] ?? 'belum cukup'}';
     final factors = (recommendation['dominant_factors'] as List? ?? [])
         .map((item) => _factorLabel('$item'))
         .toList();
     final review = '${recommendation['analysis_review'] ?? ''}'.trim();
-    final movement = '${recommendation['recommended_movement'] ?? ''}'.trim();
     final reason = '${recommendation['why_this_tactic'] ?? ''}'.trim();
-    final practiceTitle = '${recommendation['practice_title'] ?? ''}'.trim();
     final reductionSteps = _listOfStrings(
       recommendation['risk_reduction_steps'],
     ).where((item) => item.trim().isNotEmpty).toList();
-    final canStart = const {'hijau', 'kuning', 'merah'}.contains(category);
-    void openPractice() {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => KabatZinnPracticeScreen(snapshot: snapshot),
-        ),
-      );
-    }
 
     return SoftCard(
       child: Column(
@@ -1154,38 +1160,6 @@ class _RecommendationCard extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: 12),
-          _PracticeCallout(
-            title: practiceTitle,
-            text: '${recommendation['practice'] ?? ''}',
-          ),
-          if (movement.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            _RecommendationDetailLine(
-              icon: Icons.accessibility_new,
-              text: movement,
-            ),
-          ],
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: canStart ? openPractice : null,
-                  icon: const Icon(Icons.menu_book_outlined),
-                  label: const Text('Info Teknik'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: canStart ? openPractice : null,
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Mulai Latihan'),
-                ),
-              ),
-            ],
-          ),
           if (factors.isNotEmpty) ...[
             const SizedBox(height: 14),
             Wrap(

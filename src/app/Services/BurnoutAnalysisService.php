@@ -307,7 +307,7 @@ class BurnoutAnalysisService
         $weightedActualHours = $this->weightedCurrentHours($activities);
         $activeDays = max(1, $activities->pluck('activity_date')->map->toDateString()->unique()->count());
         $periodCapacity = self::MAX_DAILY_CAPACITY_HOURS * $activeDays;
-        $journalRows = $completed->filter(fn (Activity $activity) => $this->hasStructuredPostJournal($activity));
+        $journalRows = $completed->filter(fn (Activity $activity) => $this->hasReviewableJournal($activity));
         $crisisCount = $journalRows->filter(fn (Activity $activity) => (bool) $activity->checkout_crisis_flag)->count();
         $selfReportLevels = $this->selfReportLevels($user, $periodStart, $periodEnd);
         $tacticCatalog = $this->mindfulnessTacticCatalog();
@@ -666,10 +666,25 @@ class BurnoutAnalysisService
         return filled($activity->checkout_fact) || filled($activity->checkout_feeling);
     }
 
+    private function hasReviewableJournal(Activity $activity): bool
+    {
+        return $activity->checkout_at !== null
+            && (
+                $this->hasStructuredPostJournal($activity)
+                || filled($activity->checkout_mood)
+                || filled($activity->checkout_mood_detected)
+                || filled($activity->checkout_suggestion)
+                || filled($activity->checkout_pattern)
+                || filled($activity->checkout_plan)
+                || count($activity->checkout_burnout_tags ?? []) > 0
+                || count($activity->checkout_auto_burnout_tags ?? []) > 0
+            );
+    }
+
     private function wellbeingScore(Collection $activities, array $selfReportLevels = []): float
     {
         $checkinRows = $activities->filter(fn (Activity $activity) => $activity->checkin_mood !== null);
-        $checkoutRows = $activities->filter(fn (Activity $activity) => $this->hasStructuredPostJournal($activity));
+        $checkoutRows = $activities->filter(fn (Activity $activity) => $this->hasReviewableJournal($activity));
         $totalSessions = $checkinRows->count() + $checkoutRows->count();
         $negativeSessions = $checkinRows->filter(fn (Activity $activity) => $this->checkinNegative($activity))->count()
             + $checkoutRows->filter(fn (Activity $activity) => $this->checkoutNegative($activity))->count();
@@ -702,7 +717,7 @@ class BurnoutAnalysisService
 
     private function checkoutNegative(Activity $activity): bool
     {
-        return $this->hasStructuredPostJournal($activity)
+        return $this->hasReviewableJournal($activity)
             && (in_array($activity->checkout_mood, self::CHECKOUT_NEGATIVE_MOODS, true)
                 || $this->hasPressureText($this->checkoutText($activity)));
     }
@@ -716,7 +731,7 @@ class BurnoutAnalysisService
 
     private function checkoutNegativeRatio(Collection $activities): float
     {
-        $rows = $activities->filter(fn (Activity $activity) => $this->hasStructuredPostJournal($activity));
+        $rows = $activities->filter(fn (Activity $activity) => $this->hasReviewableJournal($activity));
 
         return $rows->isEmpty() ? 0 : $rows->filter(fn (Activity $activity) => $this->checkoutNegative($activity))->count() / $rows->count();
     }
@@ -739,7 +754,7 @@ class BurnoutAnalysisService
 
     private function dimensionDensity(Collection $activities): float
     {
-        $rows = $activities->filter(fn (Activity $activity) => $this->hasStructuredPostJournal($activity));
+        $rows = $activities->filter(fn (Activity $activity) => $this->hasReviewableJournal($activity));
         if ($rows->isEmpty()) {
             return 0;
         }
@@ -812,7 +827,7 @@ class BurnoutAnalysisService
             $factors[] = 'checkout_negative_mood';
         }
 
-        $journalRows = $completed->filter(fn (Activity $activity) => $this->hasStructuredPostJournal($activity));
+        $journalRows = $completed->filter(fn (Activity $activity) => $this->hasReviewableJournal($activity));
         if ($journalRows->isNotEmpty() && $this->dimensionDensity($completed) >= 0.5) {
             $factors[] = 'journal_pressure_terms';
         }
@@ -846,12 +861,15 @@ class BurnoutAnalysisService
             ->sortByDesc(fn (Activity $activity) => $activity->checkout_at)
             ->map(function (Activity $activity) use ($tacticCatalog) {
                 $recommendedTactic = $this->recommendedTacticForJournalActivity($activity, $tacticCatalog);
+                $score = $this->activityRiskScore($activity);
 
                 return [
                     'activity_id' => $activity->id,
                     'title' => $activity->title,
                     'activity_date' => $activity->activity_date?->toDateString(),
                     'checked_out_at' => $activity->checkout_at?->toIso8601String(),
+                    'score' => round($score, 2),
+                    'condition' => $this->category($score),
                     'mood' => $activity->checkout_mood,
                     'mood_detected' => $activity->checkout_mood_detected,
                     'fact' => $activity->checkout_fact,
@@ -912,12 +930,12 @@ class BurnoutAnalysisService
             return 'grounding_321';
         }
 
-        if (in_array('kelelahan_emosional', $dimensions, true) || $mood === 'lelah') {
-            return 'body_scan_micro';
-        }
-
         if ($mood === 'marah') {
             return 'stop_technique';
+        }
+
+        if (in_array('kelelahan_emosional', $dimensions, true) || $mood === 'lelah') {
+            return 'body_scan_micro';
         }
 
         if ($mood === 'cemas') {
@@ -941,6 +959,7 @@ class BurnoutAnalysisService
             ->sortBy(fn (Activity $activity) => $activity->start_at ?? $activity->created_at)
             ->map(function (Activity $activity) {
                 $score = $this->activityRiskScore($activity);
+                $hasJournal = $this->hasReviewableJournal($activity);
 
                 return [
                     'activity_id' => $activity->id,
@@ -957,10 +976,13 @@ class BurnoutAnalysisService
                     'checkin_mood' => $activity->checkin_mood,
                     'checkout_mood' => $activity->checkout_mood,
                     'mood_detected' => $activity->checkout_mood_detected,
-                    'has_journal' => $this->hasStructuredPostJournal($activity),
+                    'has_journal' => $hasJournal,
                     'burnout_dimensions' => $this->burnoutDimensions($activity),
                     'score' => round($score, 2),
                     'condition' => $this->category($score),
+                    'recommended_tactic' => $hasJournal
+                        ? $this->recommendedTacticForJournalActivity($activity)
+                        : null,
                 ];
             })
             ->values()
@@ -977,6 +999,7 @@ class BurnoutAnalysisService
 
         if ($this->checkoutNegative($activity)) {
             $score += in_array($activity->checkout_mood, self::CHECKOUT_NEGATIVE_MOODS, true) ? 20 : 12;
+            $score = max($score, 40);
         }
 
         if ($this->hasPressureText($this->checkoutText($activity))) {

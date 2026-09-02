@@ -320,16 +320,29 @@ test('one angry checkout raises the daily status to yellow while counting all jo
         'burnout_tags' => ['kelelahan_emosional'],
     ])->assertOk();
 
-    $this->getJson('/api/burnout-analyses/overview')
+    $overview = $this->getJson('/api/burnout-analyses/overview')
         ->assertOk()
         ->assertJsonPath('today.activity_count', 2)
         ->assertJsonPath('today.completed_activity_count', 2)
         ->assertJsonPath('today.journal_count', 2)
         ->assertJsonPath('today.category', 'kuning')
         ->assertJsonPath('today.score', 40)
+        ->assertJsonPath('today.activity_breakdown.0.title', 'Ngajar bahasa indonesia')
+        ->assertJsonPath('today.activity_breakdown.0.condition', 'hijau')
         ->assertJsonPath('today.activity_breakdown.1.title', 'Ngajar bahasa inggris')
         ->assertJsonPath('today.activity_breakdown.1.condition', 'merah')
-        ->assertJsonCount(2, 'today.journal_reviews');
+        ->assertJsonCount(2, 'today.journal_reviews')
+        ->json('today');
+
+    $reviews = collect($overview['journal_reviews']);
+    $breakdown = collect($overview['activity_breakdown']);
+
+    expect($reviews->pluck('title')->all())->toContain('Ngajar bahasa indonesia', 'Ngajar bahasa inggris')
+        ->and($reviews->firstWhere('title', 'Ngajar bahasa indonesia')['condition'])->toBe('hijau')
+        ->and($reviews->firstWhere('title', 'Ngajar bahasa indonesia')['recommended_tactic']['code'])->toBe('mindful_breathing')
+        ->and($reviews->firstWhere('title', 'Ngajar bahasa inggris')['recommended_tactic']['code'])->toBe('stop_technique')
+        ->and($breakdown->firstWhere('title', 'Ngajar bahasa indonesia')['recommended_tactic']['code'])->toBe('mindful_breathing')
+        ->and($breakdown->firstWhere('title', 'Ngajar bahasa inggris')['condition'])->toBe('merah');
 
     $this->getJson('/api/activities?date='.now()->toDateString())
         ->assertOk()
