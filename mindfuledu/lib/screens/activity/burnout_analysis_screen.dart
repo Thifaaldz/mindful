@@ -154,7 +154,6 @@ class _AnalysisResult extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.secondary;
     final recommendation = _jsonMap(snapshot['recommendation_summary']);
     final category = '${snapshot['category'] ?? 'belum cukup'}';
     final sufficient = snapshot['data_sufficiency'] == true;
@@ -162,22 +161,20 @@ class _AnalysisResult extends StatelessWidget {
         .map((item) => _factorLabel('$item'))
         .toList();
     final review = '${recommendation['analysis_review'] ?? ''}'.trim();
-    final movement = '${recommendation['recommended_movement'] ?? ''}'.trim();
-    final reason = '${recommendation['why_this_tactic'] ?? ''}'.trim();
-    final practiceTitle = '${recommendation['practice_title'] ?? ''}'.trim();
-    final reductionSteps =
-        (recommendation['risk_reduction_steps'] as List? ?? [])
-            .map((item) => '$item'.trim())
-            .where((item) => item.isNotEmpty)
-            .toList();
-    final canStart = const {'hijau', 'kuning', 'merah'}.contains(category);
-    void openPractice() {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => KabatZinnPracticeScreen(snapshot: snapshot),
-        ),
-      );
-    }
+    final reductionSteps = _listOfStrings(
+      recommendation['risk_reduction_steps'],
+    ).where((item) => item.trim().isNotEmpty).toList();
+    final reviews = _journalReviews(snapshot);
+    final score = snapshot['final_burnout_risk_score'];
+    final periodType = '${snapshot['period_type'] ?? 'daily'}';
+    final activityCount = _numValue(snapshot['activity_count']).round();
+    final completedCount = _numValue(
+      snapshot['completed_activity_count'],
+    ).round();
+    final journalCount = _numValue(
+      _jsonMap(snapshot['payload'])['journal_count'],
+      fallback: reviews.length.toDouble(),
+    ).round();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -188,23 +185,52 @@ class _AnalysisResult extends StatelessWidget {
             children: [
               Text(
                 sufficient
-                    ? '${recommendation['headline'] ?? 'Rekomendasi'}'
+                    ? 'Kesimpulan ${_periodLabel(periodType)}'
                     : 'Data belum cukup',
                 style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  StatusPill(
+                    label: _categoryLabel(category),
+                    color: _categoryColor(category),
+                  ),
+                  if (score != null)
+                    StatusPill(
+                      label: 'Skor ${_numValue(score).toStringAsFixed(0)}/100',
+                      color: _scoreColor(_numValue(score)),
+                    ),
+                  StatusPill(
+                    label: '$activityCount activity',
+                    color: AppTheme.muted,
+                  ),
+                  StatusPill(
+                    label: '$completedCount selesai',
+                    color: AppTheme.muted,
+                  ),
+                  StatusPill(
+                    label: '$journalCount journal',
+                    color: AppTheme.muted,
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               Text(
                 sufficient
-                    ? '${recommendation['action'] ?? ''}'
+                    ? '${recommendation['headline'] ?? 'Rekomendasi'}'
                     : 'Lengkapi check-out dan jurnal pasca aktivitas agar rekomendasi bisa mengikuti kondisi Anda.',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
+              if ('${recommendation['action'] ?? ''}'.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text('${recommendation['action']}'),
+              ],
               if (review.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 _InsightLine(icon: Icons.psychology_outlined, text: review),
-              ],
-              if (reason.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                _InsightLine(icon: Icons.lightbulb_outline, text: reason),
               ],
               if (reductionSteps.isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -218,62 +244,6 @@ class _AnalysisResult extends StatelessWidget {
                   ),
                 ),
               ],
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: primary.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.line),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.self_improvement, color: primary),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (practiceTitle.isNotEmpty) ...[
-                            Text(
-                              practiceTitle,
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
-                            const SizedBox(height: 4),
-                          ],
-                          Text('${recommendation['practice'] ?? ''}'),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (movement.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                _InsightLine(icon: Icons.accessibility_new, text: movement),
-              ],
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: canStart ? openPractice : null,
-                      icon: const Icon(Icons.menu_book_outlined),
-                      label: const Text('Info Teknik'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: canStart ? openPractice : null,
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('Mulai Latihan'),
-                    ),
-                  ),
-                ],
-              ),
               if (factors.isNotEmpty) ...[
                 const SizedBox(height: 14),
                 Wrap(
@@ -290,7 +260,373 @@ class _AnalysisResult extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(height: 16),
+        _ActivityAnalysisSection(
+          periodType: periodType,
+          reviews: reviews,
+          fallbackActivityCount: activityCount,
+        ),
       ],
+    );
+  }
+}
+
+class _ActivityAnalysisSection extends StatelessWidget {
+  const _ActivityAnalysisSection({
+    required this.periodType,
+    required this.reviews,
+    required this.fallbackActivityCount,
+  });
+
+  final String periodType;
+  final List<Map<String, dynamic>> reviews;
+  final int fallbackActivityCount;
+
+  @override
+  Widget build(BuildContext context) {
+    if (reviews.isEmpty) {
+      return SoftCard(
+        child: _InsightLine(
+          icon: Icons.edit_note_outlined,
+          text: fallbackActivityCount > 0
+              ? 'Activity sudah tercatat, tetapi detail review akan muncul setelah activity selesai check-out dan jurnal pasca terisi.'
+              : 'Belum ada activity pada periode ini.',
+        ),
+      );
+    }
+
+    final grouped = _groupReviewsByDate(reviews);
+    final entries = grouped.entries.toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: Text(
+            'Detail Analisis Activity ${_periodLabel(periodType)}',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (var groupIndex = 0; groupIndex < entries.length; groupIndex++) ...[
+          _DayDivider(date: entries[groupIndex].key),
+          const SizedBox(height: 10),
+          for (final review in entries[groupIndex].value) ...[
+            _ActivityAnalysisCard(review: review),
+            const SizedBox(height: 12),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
+class _DayDivider extends StatelessWidget {
+  const _DayDivider({required this.date});
+
+  final String date;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.secondary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: primary.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.line),
+      ),
+      child: Text(
+        _dayLabel(date),
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: primary,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _ActivityAnalysisCard extends StatelessWidget {
+  const _ActivityAnalysisCard({required this.review});
+
+  final Map<String, dynamic> review;
+
+  @override
+  Widget build(BuildContext context) {
+    final condition = '${review['condition'] ?? _categoryFromReview(review)}';
+    final score = review['score'];
+    final color = _categoryColor(condition);
+    final mood = '${review['mood_detected'] ?? review['mood'] ?? ''}'.trim();
+    final fact = '${review['fact'] ?? ''}'.trim();
+    final feeling = '${review['feeling'] ?? ''}'.trim();
+    final pattern = '${review['pattern'] ?? ''}'.trim();
+    final plan = '${review['plan'] ?? ''}'.trim();
+    final suggestion = '${review['suggestion'] ?? ''}'.trim();
+    final dimensions = _listOfStrings(review['burnout_dimensions']);
+    final tactic = _jsonMap(review['recommended_tactic']);
+    final tacticTitle = '${tactic['title'] ?? ''}'.trim();
+    final tacticText = '${tactic['description'] ?? tactic['practice'] ?? ''}'
+        .trim();
+    final tacticReason = '${tactic['why_this_tactic'] ?? ''}'.trim();
+    final movement = '${tactic['recommended_movement'] ?? ''}'.trim();
+
+    void openTechnique() {
+      if (tactic.isEmpty) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => KabatZinnPracticeScreen(
+            snapshot: {
+              'source': 'activity_analysis',
+              'category': condition,
+              'recommendation_summary': {
+                'practice_code': tactic['code'],
+                'practice_title': tactic['title'],
+                'practice': tacticText,
+                'recommended_movement': tactic['recommended_movement'],
+                'why_this_tactic': tactic['why_this_tactic'],
+                'tactic': tactic,
+              },
+              'tactic': tactic,
+            },
+          ),
+        ),
+      );
+    }
+
+    return SoftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                backgroundColor: color.withValues(alpha: 0.14),
+                child: Icon(Icons.analytics_outlined, color: color),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${review['title'] ?? 'Aktivitas'}',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _reviewDateLabel(
+                        review['checked_out_at'] ?? review['activity_date'],
+                      ),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.muted,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              StatusPill(
+                label: score == null
+                    ? _categoryLabel(condition)
+                    : '${_categoryLabel(condition)} ${_numValue(score).toStringAsFixed(0)}',
+                color: color,
+              ),
+              if (mood.isNotEmpty)
+                StatusPill(label: 'Mood: $mood', color: color),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _InsightLine(
+            icon: Icons.psychology_outlined,
+            text: _activityInsight(review),
+          ),
+          if (fact.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _DetailBlock(label: 'Fakta', text: fact),
+          ],
+          if (feeling.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _DetailBlock(label: 'Perasaan', text: feeling),
+          ],
+          if (pattern.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _DetailBlock(label: 'Pola', text: pattern),
+          ],
+          if (plan.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _DetailBlock(label: 'Rencana', text: plan),
+          ],
+          if (suggestion.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _AiSuggestion(text: suggestion),
+          ],
+          if (dimensions.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: dimensions
+                  .map(
+                    (dimension) => StatusPill(
+                      label: _dimensionLabel(dimension),
+                      color: AppTheme.muted,
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+          if (tactic.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _TechniqueRecommendation(
+              condition: condition,
+              title: tacticTitle,
+              text: tacticText,
+              reason: tacticReason,
+              movement: movement,
+              onOpen: openTechnique,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailBlock extends StatelessWidget {
+  const _DetailBlock({required this.label, required this.text});
+
+  final String label;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    if (text.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: AppTheme.muted,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(text),
+      ],
+    );
+  }
+}
+
+class _AiSuggestion extends StatelessWidget {
+  const _AiSuggestion({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.secondary;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: primary.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.line),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.auto_awesome, color: primary),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text)),
+        ],
+      ),
+    );
+  }
+}
+
+class _TechniqueRecommendation extends StatelessWidget {
+  const _TechniqueRecommendation({
+    required this.condition,
+    required this.title,
+    required this.text,
+    required this.reason,
+    required this.movement,
+    required this.onOpen,
+  });
+
+  final String condition;
+  final String title;
+  final String text;
+  final String reason;
+  final String movement;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _categoryColor(condition);
+    final actionPrefix = condition == 'hijau'
+        ? 'Untuk menjaga kondisi tetap stabil'
+        : 'Untuk membantu menurunkan tekanan activity ini';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.self_improvement, color: color),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title.isEmpty ? 'Teknik mindfulness' : title,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '$actionPrefix, lakukan ${title.isEmpty ? 'teknik ini' : title}.',
+          ),
+          if (text.isNotEmpty) ...[const SizedBox(height: 8), Text(text)],
+          if (reason.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _InsightLine(icon: Icons.lightbulb_outline, text: reason),
+          ],
+          if (movement.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _InsightLine(icon: Icons.accessibility_new, text: movement),
+          ],
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            onPressed: onOpen,
+            icon: const Icon(Icons.play_arrow),
+            label: const Text('Buka Teknik Ini'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -366,6 +702,134 @@ class _PeriodChip extends StatelessWidget {
 Map<String, dynamic> _jsonMap(dynamic value) {
   if (value is Map) return Map<String, dynamic>.from(value);
   return <String, dynamic>{};
+}
+
+List<Map<String, dynamic>> _listOfMaps(dynamic value) {
+  if (value is List) return value.map((item) => _jsonMap(item)).toList();
+  return const [];
+}
+
+List<String> _listOfStrings(dynamic value) {
+  if (value is List) return value.map((item) => '$item').toList();
+  return const [];
+}
+
+List<Map<String, dynamic>> _journalReviews(Map<String, dynamic> snapshot) {
+  final direct = _listOfMaps(snapshot['journal_reviews']);
+  if (direct.isNotEmpty) return direct;
+
+  return _listOfMaps(_jsonMap(snapshot['payload'])['journal_reviews']);
+}
+
+Map<String, List<Map<String, dynamic>>> _groupReviewsByDate(
+  List<Map<String, dynamic>> reviews,
+) {
+  final grouped = <String, List<Map<String, dynamic>>>{};
+  for (final review in reviews) {
+    final key = _dateKey(review['activity_date'] ?? review['checked_out_at']);
+    grouped.putIfAbsent(key, () => []).add(review);
+  }
+  return grouped;
+}
+
+String _dateKey(dynamic value) {
+  final parsed = DateTime.tryParse('$value');
+  if (parsed == null) return '$value';
+  return DateFormat('yyyy-MM-dd').format(parsed.toLocal());
+}
+
+String _dayLabel(String date) {
+  final parsed = DateTime.tryParse(date);
+  if (parsed == null) return date;
+  return DateFormat('EEEE, d MMMM yyyy', 'id_ID').format(parsed);
+}
+
+String _reviewDateLabel(dynamic value) {
+  final parsed = DateTime.tryParse('$value');
+  if (parsed == null) return 'Tanggal belum tersedia';
+  return DateFormat('d MMM yyyy, HH:mm', 'id_ID').format(parsed.toLocal());
+}
+
+String _periodLabel(String periodType) {
+  return switch (periodType) {
+    'weekly' => 'mingguan',
+    'monthly' => 'bulanan',
+    _ => 'harian',
+  };
+}
+
+double _numValue(dynamic value, {double fallback = 0}) {
+  if (value is num) return value.toDouble();
+  return double.tryParse('$value') ?? fallback;
+}
+
+String _categoryLabel(String category) {
+  return switch (category) {
+    'hijau' => 'Hijau',
+    'kuning' => 'Kuning',
+    'merah' => 'Merah',
+    _ => 'Belum',
+  };
+}
+
+Color _categoryColor(String category) {
+  return switch (category) {
+    'merah' => const Color(0xFFC65A4A),
+    'kuning' => const Color(0xFFD99B3D),
+    'hijau' => AppTheme.olive,
+    _ => AppTheme.muted,
+  };
+}
+
+Color _scoreColor(double score) {
+  if (score >= 70) return const Color(0xFFC65A4A);
+  if (score >= 40) return const Color(0xFFD99B3D);
+  return AppTheme.olive;
+}
+
+String _categoryFromReview(Map<String, dynamic> review) {
+  if (review['crisis_flag'] == true) return 'merah';
+
+  final mood = '${review['mood_detected'] ?? review['mood'] ?? ''}';
+  if (const {'cemas', 'sedih', 'marah', 'lelah'}.contains(mood)) {
+    return 'kuning';
+  }
+
+  return 'hijau';
+}
+
+String _activityInsight(Map<String, dynamic> review) {
+  final condition = '${review['condition'] ?? _categoryFromReview(review)}';
+  final title = '${review['title'] ?? 'Aktivitas ini'}';
+  final mood = '${review['mood_detected'] ?? review['mood'] ?? ''}'.trim();
+  final fact = '${review['fact'] ?? ''}'.trim();
+  final feeling = '${review['feeling'] ?? ''}'.trim();
+  final tactic = _jsonMap(review['recommended_tactic']);
+  final tacticTitle = '${tactic['title'] ?? ''}'.trim();
+
+  final conditionText = switch (condition) {
+    'merah' => 'menunjukkan tekanan tinggi dan perlu dipulihkan lebih serius',
+    'kuning' => 'mulai menunjukkan tanda tekanan yang perlu diturunkan',
+    'hijau' => 'masih relatif stabil dan bisa dipertahankan',
+    _ => 'belum memiliki status yang cukup jelas',
+  };
+  final moodText = mood.isEmpty ? '' : ' Mood yang terbaca adalah $mood.';
+  final factText = fact.isEmpty ? '' : ' Fakta utama: $fact';
+  final feelingText = feeling.isEmpty ? '' : ' Perasaan yang muncul: $feeling';
+  final tacticText = tacticTitle.isEmpty
+      ? ''
+      : ' Teknik yang disarankan untuk activity ini adalah $tacticTitle.';
+
+  return '$title $conditionText.$moodText$factText$feelingText$tacticText';
+}
+
+String _dimensionLabel(String dimension) {
+  return switch (dimension) {
+    'kelelahan_emosional' => 'Kelelahan emosional',
+    'depersonalisasi' => 'Depersonalisasi',
+    'rendah_pencapaian_diri' => 'Rendah pencapaian diri',
+    _ => dimension,
+  };
 }
 
 String _factorLabel(String factor) {

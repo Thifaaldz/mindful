@@ -268,6 +268,16 @@ test('daily analysis counts every checkout journal and returns all ai reviews', 
         ->assertJsonPath('completed_activity_count', 2)
         ->assertJsonPath('payload.journal_count', 2)
         ->assertJsonCount(2, 'payload.journal_reviews');
+
+    $this->postJson('/api/burnout-analyses', [
+        'period_type' => 'monthly',
+        'date' => now()->toDateString(),
+    ])
+        ->assertCreated()
+        ->assertJsonPath('activity_count', 2)
+        ->assertJsonPath('completed_activity_count', 2)
+        ->assertJsonPath('payload.journal_count', 2)
+        ->assertJsonCount(2, 'payload.journal_reviews');
 });
 
 test('one angry checkout raises the daily status to yellow while counting all journals', function () {
