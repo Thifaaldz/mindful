@@ -160,10 +160,13 @@ class _AnalysisResult extends StatelessWidget {
     final factors = (recommendation['dominant_factors'] as List? ?? [])
         .map((item) => _factorLabel('$item'))
         .toList();
-    final review = '${recommendation['analysis_review'] ?? ''}'.trim();
+    final action = _cleanAnalysisText('${recommendation['action'] ?? ''}');
+    final review = _cleanAnalysisText(
+      '${recommendation['analysis_review'] ?? ''}',
+    );
     final reductionSteps = _listOfStrings(
       recommendation['risk_reduction_steps'],
-    ).where((item) => item.trim().isNotEmpty).toList();
+    ).map(_cleanAnalysisText).where((item) => item.isNotEmpty).toList();
     final reviews = _journalReviews(snapshot);
     final score = snapshot['final_burnout_risk_score'];
     final periodType = '${snapshot['period_type'] ?? 'daily'}';
@@ -224,9 +227,9 @@ class _AnalysisResult extends StatelessWidget {
                     : 'Lengkapi check-out dan jurnal pasca aktivitas agar rekomendasi bisa mengikuti kondisi Anda.',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
-              if ('${recommendation['action'] ?? ''}'.trim().isNotEmpty) ...[
+              if (action.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Text('${recommendation['action']}'),
+                Text(action),
               ],
               if (review.isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -580,7 +583,7 @@ class _TechniqueRecommendation extends StatelessWidget {
     final color = _categoryColor(condition);
     final actionPrefix = condition == 'hijau'
         ? 'Untuk menjaga kondisi tetap stabil'
-        : 'Untuk membantu menurunkan tekanan activity ini';
+        : 'Untuk membantu menurunkan tekanan dari aktivitas ini';
 
     return Container(
       width: double.infinity,
@@ -818,9 +821,23 @@ String _activityInsight(Map<String, dynamic> review) {
   final feelingText = feeling.isEmpty ? '' : ' Perasaan yang muncul: $feeling';
   final tacticText = tacticTitle.isEmpty
       ? ''
-      : ' Teknik yang disarankan untuk activity ini adalah $tacticTitle.';
+      : ' Karena kondisi ini, $tacticTitle berguna sebagai latihan yang paling sesuai untuk aktivitas tersebut.';
 
   return '$title $conditionText.$moodText$factText$feelingText$tacticText';
+}
+
+String _cleanAnalysisText(String value) {
+  var text = value.trim();
+  if (text.isEmpty) return '';
+
+  text = text.replaceAll(
+    RegExp(r'\bberdasarkan analisis ini,\s*', caseSensitive: false),
+    '',
+  );
+  text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+  if (text.isEmpty) return '';
+  return text[0].toUpperCase() + text.substring(1);
 }
 
 String _dimensionLabel(String dimension) {

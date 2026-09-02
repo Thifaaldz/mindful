@@ -1225,17 +1225,22 @@ class BurnoutAnalysisService
     private function actionWithPracticeTitle(?string $action, array $tactic): string
     {
         $title = trim((string) ($tactic['title'] ?? 'latihan mindfulness'));
-        $text = trim((string) $action);
+        $text = $this->removeRepeatedAnalysisIntro(trim((string) $action));
 
         if ($title !== '' && str_contains(mb_strtolower($text), mb_strtolower($title))) {
             return $text;
         }
 
         if ($text !== '') {
-            return "Berdasarkan analisis ini, lakukan {$title} untuk membantu Anda. {$text}";
+            return "Dari hasil aktivitas pada periode ini, {$title} dapat membantu menata kondisi Anda. {$text}";
         }
 
-        return "Berdasarkan analisis ini, lakukan {$title} untuk membantu menurunkan tekanan dan menata kembali energi.";
+        return "Dari hasil aktivitas pada periode ini, lakukan {$title} untuk membantu menurunkan tekanan dan menata kembali energi.";
+    }
+
+    private function removeRepeatedAnalysisIntro(string $text): string
+    {
+        return trim((string) preg_replace('/\bberdasarkan analisis ini,\s*/iu', '', $text));
     }
 
     private function analysisReview(?string $category, array $dominantFactors): string
