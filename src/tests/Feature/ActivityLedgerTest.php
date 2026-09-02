@@ -446,6 +446,10 @@ test('manual burnout analysis stores fastapi recommendation when ml service is a
             'suggestion' => 'Pertahankan ritme dan beri jeda transisi.',
             'crisis_flag' => false,
             'burnout_dimensions' => [],
+            'practice_code' => 'mindful_breathing',
+            'practice_title' => 'Mindful Breathing',
+            'recommended_movement' => 'Duduk nyaman dan ikuti napas masuk-keluar selama beberapa menit.',
+            'why_this_tactic' => 'Jurnal stabil cocok dijaga dengan napas mindful ringan.',
             'source' => 'mock',
             'raw_response' => null,
         ]),
@@ -519,17 +523,18 @@ test('manual burnout analysis stores fastapi recommendation when ml service is a
         ->assertCreated()
         ->assertJsonPath('model_version', 'fastapi-rule-mbsr-v2.3')
         ->assertJsonPath('recommendation_summary.headline', 'Perlu jeda pemulihan dari FastAPI')
-        ->assertJsonPath('recommendation_summary.practice_code', 'body_scan_micro')
+        ->assertJsonPath('recommendation_summary.practice_code', 'mindful_breathing')
         ->assertJsonPath('recommendation_summary.source', 'gemini')
-        ->assertJsonPath('recommendation_summary.tactic.category', 'body_scan_micro')
-        ->assertJsonPath('recommendation_summary.tactic.steps.1', 'Pindai kepala sampai kaki')
+        ->assertJsonPath('recommendation_summary.tactic.category', 'mindful_breathing')
+        ->assertJsonPath('recommendation_summary.tactic.title', 'Mindful Breathing')
+        ->assertJsonPath('payload.journal_reviews.0.recommended_tactic.code', 'mindful_breathing')
         ->assertJsonPath('payload.ml_service_used', true)
         ->assertJsonPath('payload.recommendation_source', 'gemini');
 
     $this->getJson('/api/burnout-analyses')
         ->assertOk()
         ->assertJsonPath('data.0.recommendation_summary.source', 'gemini')
-        ->assertJsonPath('data.0.recommendation_summary.tactic.title', 'Body Scan Singkat');
+        ->assertJsonPath('data.0.recommendation_summary.tactic.title', 'Mindful Breathing');
 
     Http::assertSent(fn ($request) => $request->url() === 'http://ml:8000/score/burnout'
         && $request['role_context'] === 'teacher'
@@ -567,6 +572,10 @@ test('manual burnout analysis reuses cached ai result when period data is unchan
             'suggestion' => 'Ambil jeda grounding sebelum lanjut.',
             'crisis_flag' => false,
             'burnout_dimensions' => ['kelelahan_emosional'],
+            'practice_code' => 'grounding_321',
+            'practice_title' => 'Grounding 3-2-1',
+            'recommended_movement' => 'Lihat tiga hal, dengar dua suara, lalu rasakan satu napas.',
+            'why_this_tactic' => 'Gemini memilih grounding untuk menurunkan intensitas marah setelah rapat.',
             'source' => 'gemini',
             'raw_response' => '{}',
         ]),

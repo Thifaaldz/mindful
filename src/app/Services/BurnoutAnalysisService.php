@@ -355,6 +355,7 @@ class BurnoutAnalysisService
         $recommendation = is_array($mlScore['recommendation_summary'] ?? null)
             ? $mlScore['recommendation_summary']
             : $this->recommendation($category, $dominantFactors, $user, $tacticCatalog);
+        $recommendation = $this->alignRecommendationWithJournalReview($recommendation, $journalRows, $tacticCatalog);
         $recommendation = $this->enrichRecommendationWithTactic($recommendation, $category, $dominantFactors, $user, $tacticCatalog);
         $recommendationCodes = array_values(array_unique($recommendation['codes'] ?? []));
         if ($recommendationCodes === [] && is_array($mlScore['recommendation_codes'] ?? null)) {
@@ -1151,6 +1152,35 @@ class BurnoutAnalysisService
         $recommendation['risk_reduction_steps'] = $recommendation['risk_reduction_steps'] ?? $this->riskReductionSteps($category, $dominantFactors, $role);
         $recommendation['recommended_movement'] = $recommendation['recommended_movement'] ?? $this->movementFromTactic($tactic);
         $recommendation['why_this_tactic'] = $recommendation['why_this_tactic'] ?? $this->whyTactic($category, $dominantFactors, $tactic);
+
+        return $recommendation;
+    }
+
+    private function alignRecommendationWithJournalReview(array $recommendation, Collection $journalRows, array $tacticCatalog): array
+    {
+        $activity = $journalRows
+            ->sortByDesc(fn (Activity $activity) => $activity->checkout_at)
+            ->first();
+
+        if (! $activity) {
+            return $recommendation;
+        }
+
+        $tactic = $this->recommendedTacticForJournalActivity($activity, $tacticCatalog);
+        if (($tactic['code'] ?? null) === null) {
+            return $recommendation;
+        }
+
+        $recommendation['practice_code'] = $tactic['code'];
+        $recommendation['practice_title'] = $tactic['title'];
+        $recommendation['practice'] = $tactic['description'];
+        $recommendation['recommended_movement'] = $tactic['recommended_movement'];
+        $recommendation['why_this_tactic'] = $tactic['why_this_tactic'];
+        $recommendation['tactic'] = $tactic;
+        $recommendation['codes'] = array_values(array_unique([
+            $tactic['code'],
+            ...($recommendation['codes'] ?? []),
+        ]));
 
         return $recommendation;
     }

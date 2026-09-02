@@ -211,7 +211,7 @@ class ActivityController extends Controller
             'trigger' => $data['trigger'] ?? null,
         ]);
 
-        return response()->json($activity->fresh());
+        return response()->json($this->activityPayload($activity->fresh()));
     }
 
     public function checkOut(Request $request, Activity $activity)
@@ -262,7 +262,7 @@ class ActivityController extends Controller
             'checkout_burnout_tags' => $data['burnout_tags'] ?? null,
             'checkout_auto_burnout_tags' => $journalAnalysis['burnout_dimensions'] ?? [],
             'checkout_analysis_source' => $journalAnalysis['source'] ?? null,
-            'checkout_analysis_raw_response' => $journalAnalysis['raw_response'] ?? null,
+            'checkout_analysis_raw_response' => $this->journalAnalysisSnapshot($journalAnalysis),
             'checkout_mood_detected' => $journalAnalysis['mood_detected'] ?? null,
             'checkout_suggestion' => $journalAnalysis['suggestion'] ?? null,
             'checkout_crisis_flag' => (bool) ($journalAnalysis['crisis_flag'] ?? false),
@@ -282,11 +282,13 @@ class ActivityController extends Controller
                 'crisis_flag' => (bool) ($journalAnalysis['crisis_flag'] ?? false),
                 'burnout_dimensions' => $journalAnalysis['burnout_dimensions'] ?? [],
                 'source' => $journalAnalysis['source'] ?? null,
+                'practice_code' => $journalAnalysis['practice_code'] ?? null,
+                'practice_title' => $journalAnalysis['practice_title'] ?? null,
             ],
         ]);
         $activity->appendEvent('activity_completed');
 
-        return response()->json($activity->fresh());
+        return response()->json($this->activityPayload($activity->fresh()));
     }
 
     public function cancel(Request $request, Activity $activity)
@@ -546,6 +548,35 @@ class ActivityController extends Controller
                 ? $this->burnoutAnalysisService->recommendedTacticForJournalActivity($activity)
                 : null,
         ];
+    }
+
+    private function journalAnalysisSnapshot(array $journalAnalysis): ?string
+    {
+        $snapshot = array_filter([
+            'mood_detected' => $journalAnalysis['mood_detected'] ?? null,
+            'suggestion' => $journalAnalysis['suggestion'] ?? null,
+            'crisis_flag' => $journalAnalysis['crisis_flag'] ?? false,
+            'burnout_dimensions' => $journalAnalysis['burnout_dimensions'] ?? [],
+            'practice_code' => $journalAnalysis['practice_code'] ?? null,
+            'practice_title' => $journalAnalysis['practice_title'] ?? null,
+            'recommended_movement' => $journalAnalysis['recommended_movement'] ?? null,
+            'why_this_tactic' => $journalAnalysis['why_this_tactic'] ?? null,
+            'source' => $journalAnalysis['source'] ?? null,
+        ], fn ($value) => $value !== null);
+
+        $raw = $journalAnalysis['raw_response'] ?? null;
+        if (is_string($raw) && trim($raw) !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $snapshot = array_replace($decoded, $snapshot);
+            } else {
+                $snapshot['raw_response'] = $raw;
+            }
+        }
+
+        $json = json_encode($snapshot, JSON_UNESCAPED_UNICODE);
+
+        return is_string($json) ? $json : null;
     }
 
     private function classroomGatePayload(Activity $activity): ?array
