@@ -9,16 +9,18 @@
     <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700,800" rel="stylesheet">
     <style>
         :root {
-            --ink: #151713;
-            --muted: #5f625d;
-            --paper: #fcfcfa;
+            --ink: #111713;
+            --muted: #626a63;
+            --paper: #f7f8f3;
             --surface: #ffffff;
-            --line: #e7e9e4;
+            --line: #e1e7dd;
             --olive: #3e735b;
             --mint: #eaf4ef;
             --amber: #e9be51;
             --coral: #e86c58;
             --blue: #24718e;
+            --deep: #18231e;
+            --shadow: 0 18px 48px rgba(24, 35, 30, 0.12);
         }
 
         * {
@@ -31,7 +33,8 @@
 
         body {
             margin: 0;
-            background: var(--paper);
+            background:
+                linear-gradient(180deg, #f9faf5 0%, var(--paper) 38%, #ffffff 100%);
             color: var(--ink);
             font-family: "Instrument Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             line-height: 1.55;
@@ -53,8 +56,8 @@
             left: 0;
             right: 0;
             z-index: 20;
-            background: rgba(252, 252, 250, 0.88);
-            border-bottom: 1px solid rgba(231, 233, 228, 0.82);
+            background: rgba(247, 248, 243, 0.86);
+            border-bottom: 1px solid rgba(225, 231, 221, 0.78);
             backdrop-filter: blur(18px);
         }
 
@@ -79,7 +82,7 @@
         .brand-mark {
             width: 38px;
             height: 38px;
-            border-radius: 10px;
+            border-radius: 8px;
             display: grid;
             place-items: center;
             background: var(--surface);
@@ -118,6 +121,10 @@
             font-weight: 700;
         }
 
+        .nav-links a:not(.button):hover {
+            color: var(--ink);
+        }
+
         .button {
             display: inline-flex;
             align-items: center;
@@ -125,11 +132,17 @@
             gap: 9px;
             min-height: 48px;
             padding: 0 20px;
-            border-radius: 999px;
+            border-radius: 12px;
             border: 1px solid var(--line);
             background: var(--surface);
             font-weight: 800;
             box-shadow: 0 12px 26px rgba(20, 23, 19, 0.08);
+            transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+        }
+
+        .button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 18px 36px rgba(20, 23, 19, 0.12);
         }
 
         .button.primary {
@@ -139,13 +152,14 @@
         }
 
         .hero {
-            min-height: 760px;
+            min-height: 820px;
             display: grid;
-            align-items: end;
-            padding: 128px 0 54px;
+            align-items: center;
+            padding: 128px 0 68px;
             background:
-                linear-gradient(180deg, rgba(252, 252, 250, 0.15), rgba(252, 252, 250, 0.96)),
-                url("/landing/dashboard.jpg") center 36px / min(920px, 92vw) auto no-repeat;
+                linear-gradient(90deg, rgba(247, 248, 243, 0.99) 0%, rgba(247, 248, 243, 0.90) 42%, rgba(247, 248, 243, 0.58) 62%, rgba(247, 248, 243, 0.95) 100%),
+                linear-gradient(180deg, rgba(247, 248, 243, 0.06), rgba(247, 248, 243, 0.98)),
+                url("/landing/dashboard.jpg") right 8vw center / min(740px, 58vw) auto no-repeat;
             border-bottom: 1px solid var(--line);
         }
 
@@ -155,7 +169,30 @@
         }
 
         .hero-copy {
-            max-width: 720px;
+            max-width: 690px;
+        }
+
+        .hero-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 0 0 22px;
+            padding: 0;
+            list-style: none;
+        }
+
+        .hero-badges li {
+            display: inline-flex;
+            align-items: center;
+            min-height: 34px;
+            padding: 0 12px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.78);
+            border: 1px solid var(--line);
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 800;
+            box-shadow: 0 12px 28px rgba(24, 35, 30, 0.08);
         }
 
         .eyebrow {
@@ -181,7 +218,7 @@
         h1 {
             margin: 0;
             max-width: 780px;
-            font-size: clamp(46px, 8vw, 86px);
+            font-size: clamp(50px, 8vw, 92px);
             line-height: 0.96;
             letter-spacing: 0;
         }
@@ -199,6 +236,36 @@
             align-items: center;
             gap: 14px;
             margin-top: 30px;
+        }
+
+        .hero-stats {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            max-width: 720px;
+            margin-top: 34px;
+        }
+
+        .hero-stat {
+            padding: 16px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.82);
+            border: 1px solid rgba(225, 231, 221, 0.88);
+            box-shadow: var(--shadow);
+        }
+
+        .hero-stat strong {
+            display: block;
+            font-size: 22px;
+            line-height: 1;
+        }
+
+        .hero-stat span {
+            display: block;
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 700;
         }
 
         .download-meta {
@@ -225,6 +292,12 @@
             margin-bottom: 32px;
         }
 
+        .section-heading.center {
+            margin-left: auto;
+            margin-right: auto;
+            text-align: center;
+        }
+
         .section-heading h2 {
             margin: 0;
             font-size: clamp(30px, 4vw, 46px);
@@ -247,7 +320,7 @@
         .feature {
             min-height: 206px;
             padding: 22px;
-            border-radius: 14px;
+            border-radius: 8px;
             background: var(--surface);
             border: 1px solid var(--line);
             box-shadow: 0 18px 40px rgba(20, 23, 19, 0.06);
@@ -256,7 +329,7 @@
         .feature-icon {
             width: 42px;
             height: 42px;
-            border-radius: 12px;
+            border-radius: 8px;
             display: grid;
             place-items: center;
             margin-bottom: 18px;
@@ -280,6 +353,41 @@
             font-size: 14px;
         }
 
+        .app-strip {
+            margin-top: -34px;
+            position: relative;
+            z-index: 4;
+        }
+
+        .strip-panel {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1px;
+            overflow: hidden;
+            border-radius: 8px;
+            border: 1px solid var(--line);
+            background: var(--line);
+            box-shadow: var(--shadow);
+        }
+
+        .strip-item {
+            min-height: 112px;
+            padding: 22px;
+            background: rgba(255, 255, 255, 0.94);
+        }
+
+        .strip-item strong {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 16px;
+        }
+
+        .strip-item span {
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
         .updates {
             display: grid;
             grid-template-columns: 0.8fr 1.2fr;
@@ -289,8 +397,10 @@
 
         .release-note {
             padding: 28px;
-            border-radius: 16px;
-            background: var(--ink);
+            border-radius: 8px;
+            background:
+                linear-gradient(135deg, rgba(62, 115, 91, 0.92), rgba(24, 35, 30, 0.98)),
+                var(--deep);
             color: #fff;
             min-height: 100%;
         }
@@ -328,7 +438,7 @@
 
         .update-item {
             padding: 22px;
-            border-radius: 14px;
+            border-radius: 8px;
             background: var(--surface);
             border: 1px solid var(--line);
             box-shadow: 0 18px 40px rgba(20, 23, 19, 0.06);
@@ -389,7 +499,7 @@
 
         .screen {
             overflow: hidden;
-            border-radius: 22px;
+            border-radius: 8px;
             background: var(--surface);
             border: 1px solid var(--line);
             box-shadow: 0 22px 48px rgba(20, 23, 19, 0.12);
@@ -405,7 +515,8 @@
         }
 
         .purpose-band {
-            background: #f2f7f4;
+            background:
+                linear-gradient(180deg, #eef6f1 0%, #f8fbf5 100%);
             border-top: 1px solid var(--line);
             border-bottom: 1px solid var(--line);
         }
@@ -418,7 +529,7 @@
 
         .purpose {
             padding: 26px;
-            border-radius: 14px;
+            border-radius: 8px;
             background: rgba(255, 255, 255, 0.78);
             border: 1px solid rgba(231, 233, 228, 0.9);
         }
@@ -442,9 +553,10 @@
 
         .role {
             padding: 24px;
-            border-radius: 14px;
+            border-radius: 8px;
             background: var(--surface);
             border: 1px solid var(--line);
+            box-shadow: 0 16px 34px rgba(20, 23, 19, 0.06);
         }
 
         .role.teacher { border-top: 5px solid var(--olive); }
@@ -477,10 +589,13 @@
             gap: 28px;
             align-items: center;
             padding: 38px;
-            border-radius: 18px;
-            background: var(--ink);
+            border-radius: 8px;
+            background:
+                linear-gradient(135deg, rgba(36, 113, 142, 0.94), rgba(24, 35, 30, 0.98)),
+                var(--deep);
             color: #fff;
             overflow: hidden;
+            box-shadow: var(--shadow);
         }
 
         .download h2 {
@@ -503,6 +618,7 @@
 
         .avatar-art {
             align-self: end;
+            filter: drop-shadow(0 22px 30px rgba(0, 0, 0, 0.18));
         }
 
         .footer {
@@ -525,14 +641,17 @@
             }
 
             .hero {
-                min-height: 720px;
-                background-size: min(720px, 112vw) auto;
-                background-position: center 74px;
+                min-height: 760px;
+                align-items: end;
+                background:
+                    linear-gradient(180deg, rgba(247, 248, 243, 0.30), rgba(247, 248, 243, 0.99)),
+                    url("/landing/dashboard.jpg") center 78px / min(760px, 116vw) auto no-repeat;
             }
 
             .feature-grid,
             .updates,
             .update-list,
+            .strip-panel,
             .purpose-grid,
             .role-grid,
             .showcase,
@@ -574,7 +693,7 @@
             }
 
             .hero {
-                min-height: 690px;
+                min-height: 760px;
                 padding-top: 112px;
             }
 
@@ -586,6 +705,10 @@
             .hero-actions {
                 align-items: stretch;
                 flex-direction: column;
+            }
+
+            .hero-stats {
+                grid-template-columns: 1fr;
             }
 
             .hero-actions .button,
@@ -629,28 +752,69 @@
             <div class="hero-inner">
                 <div class="hero-copy">
                     <span class="eyebrow">Sistem mindfulness pendidikan</span>
+                    <ul class="hero-badges" aria-label="Peran pengguna">
+                        <li>Guru</li>
+                        <li>Siswa</li>
+                        <li>Orang tua</li>
+                        <li>Gemini AI</li>
+                    </ul>
                     <h1>MindfulEdu</h1>
                     <p>
-                        Aplikasi pendamping guru, siswa, dan orang tua untuk activity journal,
-                        analisis burnout, rekomendasi Gemini AI, serta latihan mindfulness yang praktis
-                        digunakan di lingkungan sekolah.
+                        MindfulEdu membantu sekolah membaca kondisi belajar harian melalui activity journal,
+                        check-in, check-out, analisis burnout, dan rekomendasi latihan mindfulness yang
+                        dipilih dari kebutuhan pengguna.
                     </p>
                     <div class="hero-actions">
                         <a class="button primary" href="/download/android">Download APK Android</a>
                         <a class="button" href="#fitur">Lihat Informasi</a>
                         <span class="download-meta">Ukuran file: {{ $apkSize }}</span>
                     </div>
+                    <div class="hero-stats" aria-label="Fokus aplikasi">
+                        <div class="hero-stat">
+                            <strong>3 Role</strong>
+                            <span>Guru, siswa, dan orang tua memiliki alur berbeda.</span>
+                        </div>
+                        <div class="hero-stat">
+                            <strong>AI Review</strong>
+                            <span>Jurnal dianalisis untuk memberi saran yang mudah dipahami.</span>
+                        </div>
+                        <div class="hero-stat">
+                            <strong>Toolkit</strong>
+                            <span>Latihan mindfulness tersedia per langkah dengan panduan TTS.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="app-strip" aria-label="Ringkasan manfaat MindfulEdu">
+            <div class="container strip-panel">
+                <div class="strip-item">
+                    <strong>Catat aktivitas</strong>
+                    <span>Activity harian menjadi data utama untuk memahami beban belajar dan mengajar.</span>
+                </div>
+                <div class="strip-item">
+                    <strong>Baca kondisi</strong>
+                    <span>Status hijau, kuning, dan merah membantu pengguna melihat kondisi dengan cepat.</span>
+                </div>
+                <div class="strip-item">
+                    <strong>Latihan tepat</strong>
+                    <span>Teknik yang muncul di analisis mengikuti rekomendasi review journal.</span>
+                </div>
+                <div class="strip-item">
+                    <strong>Monitoring</strong>
+                    <span>Dashboard web memantau activity, review journal, dan status analisis aplikasi.</span>
                 </div>
             </div>
         </section>
 
         <section id="fitur" class="section">
             <div class="container">
-                <div class="section-heading">
+                <div class="section-heading center">
                     <h2>Satu aplikasi untuk kebiasaan mindful di lingkungan belajar.</h2>
                     <p>
-                        MindfulEdu dirancang untuk membantu proses latihan, pencatatan, dan pendampingan
-                        agar guru punya data yang lebih rapi saat memantau kesejahteraan siswa.
+                        Dibuat untuk mengubah catatan harian menjadi insight yang bisa ditindaklanjuti
+                        oleh guru, siswa, dan orang tua.
                     </p>
                 </div>
                 <div class="feature-grid">
