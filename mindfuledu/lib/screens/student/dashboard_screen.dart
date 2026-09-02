@@ -8,6 +8,7 @@ import '../../core/api_client.dart';
 import '../../core/dashboard_refresh.dart';
 import '../../core/session.dart';
 import '../../widgets/app_chrome.dart';
+import '../../widgets/login_history_widgets.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
   const StudentDashboardScreen({super.key});
@@ -100,7 +101,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           ).format(DateTime.now()),
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
-                        const SizedBox(height: 22),
+                        const SizedBox(height: 8),
+                        LastLoginCaption(
+                          login: loginHistoryMap(user?['latest_login']),
+                          color: role.primary,
+                        ),
+                        const SizedBox(height: 18),
                         _StudentHeroCard(
                           onActivity: () => requestStudentTab(1),
                           onClassroom: () => requestStudentTab(1),

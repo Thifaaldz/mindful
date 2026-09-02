@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Filament\Admin\Resources\UserResource\Pages;
+use App\Filament\Admin\Resources\UserResource\RelationManagers\LoginHistoriesRelationManager;
 use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -130,6 +131,14 @@ class UserResource extends Resource
                 Tables\Columns\TextColumn::make('schoolClass.name')
                     ->label('Kelas')
                     ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('latestLoginHistory.logged_in_at')
+                    ->label('Last Login')
+                    ->dateTime('d M Y H:i')
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('latestLoginHistory.device_name')
+                    ->label('Device')
+                    ->limit(24)
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('created_at')
                     ->date()
                     ->sortable()
@@ -160,7 +169,7 @@ class UserResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            LoginHistoriesRelationManager::class,
         ];
     }
 

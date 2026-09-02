@@ -8,6 +8,7 @@ import '../../core/api_client.dart';
 import '../../core/app_theme.dart';
 import '../../core/session.dart';
 import '../../widgets/app_chrome.dart';
+import '../../widgets/login_history_widgets.dart';
 import 'reminder_settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -77,6 +78,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final className = (user['class'] as Map?)?['name'] as String?;
     final studentCode = user['student_verification_code'] as String?;
     final avatarUrl = user['avatar_url'] as String?;
+    final latestLogin = loginHistoryMap(user['latest_login']);
+    final loginHistories = (user['login_histories'] as List? ?? const [])
+        .cast<dynamic>();
 
     return Scaffold(
       body: SafeArea(
@@ -139,6 +143,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     style: Theme.of(context).textTheme.bodyMedium,
                     textAlign: TextAlign.center,
                   ),
+                  const SizedBox(height: 8),
+                  LastLoginCaption(
+                    login: latestLogin,
+                    color: accountRole.primary,
+                  ),
                   const SizedBox(height: 18),
                   if (role == 'teacher' || role == 'student')
                     FilledButton.icon(
@@ -191,6 +200,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: 22),
+                  LoginHistoryCard(
+                    histories: loginHistories,
+                    color: accountRole.primary,
+                  ),
+                  if (loginHistories.isNotEmpty) const SizedBox(height: 22),
                   _ActionCard(
                     icon: Icons.notifications_active_outlined,
                     title: 'Pengingat Harian',

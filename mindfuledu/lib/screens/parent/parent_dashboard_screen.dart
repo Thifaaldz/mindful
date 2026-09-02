@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
+import '../../core/account_role.dart';
 import '../../core/api.dart';
 import '../../core/api_client.dart';
 import '../../core/app_theme.dart';
+import '../../core/session.dart';
 import '../../widgets/app_chrome.dart';
+import '../../widgets/login_history_widgets.dart';
 
 class ParentDashboardScreen extends StatefulWidget {
   const ParentDashboardScreen({super.key});
@@ -54,6 +58,8 @@ class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = context.watch<Session>().user;
+
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -110,6 +116,11 @@ class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
                       padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
                       children: [
                         _DateHeader(date: _date),
+                        const SizedBox(height: 8),
+                        LastLoginCaption(
+                          login: loginHistoryMap(user?['latest_login']),
+                          color: AccountRole.parent.primary,
+                        ),
                         const SizedBox(height: 16),
                         if (children.isEmpty)
                           const _EmptyState(

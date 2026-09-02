@@ -71,7 +71,7 @@ test('google login creates account from verified id token', function () {
         ->and($user->email_verified_at)->not->toBeNull();
 });
 
-test('same account can stay logged in on multiple devices', function () {
+test('same account login revokes previous device session and records history', function () {
     $user = User::factory()->create([
         'email' => 'guru@mindfuledu.test',
     ]);
@@ -81,24 +81,40 @@ test('same account can stay logged in on multiple devices', function () {
         'email' => 'guru@mindfuledu.test',
         'password' => 'password',
         'role' => 'teacher',
+        'device_id' => 'device-a',
+        'device_name' => 'Samsung A55',
+        'device_brand' => 'Samsung',
+        'device_model' => 'SM-A556E',
+        'device_platform' => 'android',
     ])->assertOk();
 
     $secondLogin = $this->postJson('/api/login', [
         'email' => 'guru@mindfuledu.test',
         'password' => 'password',
         'role' => 'teacher',
+        'device_id' => 'device-b',
+        'device_name' => 'OPPO Reno',
+        'device_brand' => 'OPPO',
+        'device_model' => 'CPH2607',
+        'device_platform' => 'android',
     ])->assertOk();
 
     expect($firstLogin->json('token'))->not->toBe($secondLogin->json('token'))
-        ->and($user->tokens()->count())->toBe(2);
+        ->and($user->tokens()->count())->toBe(1)
+        ->and($user->loginHistories()->count())->toBe(2)
+        ->and($user->loginHistories()->latest('logged_in_at')->first()->device_name)->toBe('OPPO Reno')
+        ->and($user->loginHistories()->latest('logged_in_at')->first()->location)->toBe('Jakarta')
+        ->and($user->loginHistories()->latest('logged_in_at')->first()->revoked_previous_sessions)->toBeTrue();
 
     $this->withToken($firstLogin->json('token'))
         ->getJson('/api/me')
-        ->assertOk()
-        ->assertJsonPath('user.email', 'guru@mindfuledu.test');
+        ->assertUnauthorized();
 
     $this->withToken($secondLogin->json('token'))
         ->getJson('/api/me')
         ->assertOk()
-        ->assertJsonPath('user.email', 'guru@mindfuledu.test');
+        ->assertJsonPath('user.email', 'guru@mindfuledu.test')
+        ->assertJsonPath('user.latest_login.device_name', 'OPPO Reno')
+        ->assertJsonPath('user.latest_login.location', 'Jakarta')
+        ->assertJsonCount(2, 'user.login_histories');
 });

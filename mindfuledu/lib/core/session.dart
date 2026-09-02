@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
@@ -10,12 +11,18 @@ import 'api_client.dart';
 /// Holds the authenticated user's session (token + profile) and exposes
 /// auth actions used across the app.
 class Session extends ChangeNotifier {
+  Session() {
+    ApiClient.instance.onUnauthorized = _handleUnauthorized;
+  }
+
   final _storage = const FlutterSecureStorage();
   final _localAuth = LocalAuthentication();
+  final _deviceInfo = DeviceInfoPlugin();
 
   static const _tokenKey = 'token';
   static const _quickLoginEnabledKey = 'quick_login_enabled';
   static const _savedAccountKey = 'saved_account';
+  static const _deviceIdKey = 'device_id';
 
   String? token;
   Map<String, dynamic>? user;
@@ -73,9 +80,10 @@ class Session extends ChangeNotifier {
     required String role,
     bool rememberDevice = false,
   }) async {
+    final device = await _devicePayload();
     final response = await ApiClient.instance.post(
       '/login',
-      data: {'email': email, 'password': password, 'role': role},
+      data: {'email': email, 'password': password, 'role': role, ...device},
     );
     await _persist(
       response.data as Map<String, dynamic>,
@@ -94,6 +102,7 @@ class Session extends ChangeNotifier {
     String? studentVerificationCode,
     bool rememberDevice = false,
   }) async {
+    final device = await _devicePayload();
     final response = await ApiClient.instance.post(
       '/register',
       data: {
@@ -105,6 +114,7 @@ class Session extends ChangeNotifier {
         'school': school,
         'class_name': className,
         'student_verification_code': studentVerificationCode,
+        ...device,
       },
     );
     await _persist(
@@ -118,9 +128,10 @@ class Session extends ChangeNotifier {
     required String role,
     bool rememberDevice = false,
   }) async {
+    final device = await _devicePayload();
     final response = await ApiClient.instance.post(
       '/auth/google',
-      data: {'id_token': idToken, 'role': role},
+      data: {'id_token': idToken, 'role': role, ...device},
     );
     await _persist(
       response.data as Map<String, dynamic>,
@@ -224,6 +235,12 @@ class Session extends ChangeNotifier {
 
     await _restoreStoredToken(storedToken, clearOnFailure: true);
 
+    if (!isAuthenticated) {
+      throw ApiException(
+        'Sesi akun dipindahkan ke perangkat lain, silakan login ulang',
+      );
+    }
+
     if (this.role != role) {
       await _clearSavedSession();
       token = null;
@@ -316,6 +333,107 @@ class Session extends ChangeNotifier {
       key: _savedAccountKey,
       value: jsonEncode(savedAccount),
     );
+  }
+
+  void _handleUnauthorized() {
+    unawaited(_clearSessionAfterRemoteLogout());
+  }
+
+  Future<void> _clearSessionAfterRemoteLogout() async {
+    token = null;
+    user = null;
+    ApiClient.instance.setToken(null);
+    await _clearSavedSession();
+    notifyListeners();
+  }
+
+  Future<Map<String, dynamic>> _devicePayload() async {
+    final deviceId = await _deviceId();
+    var deviceName = 'Perangkat tidak dikenal';
+    String? deviceBrand;
+    String? deviceModel;
+    var devicePlatform = defaultTargetPlatform.name;
+
+    try {
+      if (kIsWeb) {
+        final info = await _deviceInfo.webBrowserInfo;
+        deviceName = '${info.browserName.name} ${info.platform ?? 'Web'}';
+        deviceBrand = info.browserName.name;
+        deviceModel = info.platform;
+        devicePlatform = 'web';
+      } else {
+        switch (defaultTargetPlatform) {
+          case TargetPlatform.android:
+            final info = await _deviceInfo.androidInfo;
+            deviceBrand = info.brand.isNotEmpty
+                ? info.brand
+                : info.manufacturer;
+            deviceModel = info.model;
+            deviceName = [
+              deviceBrand,
+              deviceModel,
+            ].where((value) => value.trim().isNotEmpty).join(' ');
+            if (deviceName.isEmpty) {
+              deviceName = 'Android Device';
+            }
+            devicePlatform = 'android';
+            break;
+          case TargetPlatform.iOS:
+            final info = await _deviceInfo.iosInfo;
+            deviceBrand = 'Apple';
+            deviceModel = info.utsname.machine;
+            deviceName = info.name.isNotEmpty ? info.name : info.model;
+            devicePlatform = 'ios';
+            break;
+          case TargetPlatform.macOS:
+            final info = await _deviceInfo.macOsInfo;
+            deviceBrand = 'Apple';
+            deviceModel = info.model;
+            deviceName = info.computerName;
+            devicePlatform = 'macos';
+            break;
+          case TargetPlatform.windows:
+            final info = await _deviceInfo.windowsInfo;
+            deviceBrand = 'Windows';
+            deviceModel = info.productName;
+            deviceName = info.computerName;
+            devicePlatform = 'windows';
+            break;
+          case TargetPlatform.linux:
+            final info = await _deviceInfo.linuxInfo;
+            deviceBrand = info.name;
+            deviceModel = info.version;
+            deviceName = info.prettyName;
+            devicePlatform = 'linux';
+            break;
+          case TargetPlatform.fuchsia:
+            devicePlatform = 'fuchsia';
+            break;
+        }
+      }
+    } catch (_) {
+      devicePlatform = defaultTargetPlatform.name;
+    }
+
+    return {
+      'device_id': deviceId,
+      'device_name': deviceName,
+      'device_brand': deviceBrand,
+      'device_model': deviceModel,
+      'device_platform': devicePlatform,
+    };
+  }
+
+  Future<String> _deviceId() async {
+    final stored = await _storage.read(key: _deviceIdKey);
+    if (stored != null && stored.isNotEmpty) {
+      return stored;
+    }
+
+    final generated = 'device-${DateTime.now().microsecondsSinceEpoch}';
+    await _storage.write(key: _deviceIdKey, value: generated);
+
+    return generated;
   }
 
   Future<void> _clearSavedSession({bool keepCurrentSession = false}) async {

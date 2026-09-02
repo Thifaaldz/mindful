@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -135,6 +136,16 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
     public function burnoutSelfReports(): HasMany
     {
         return $this->hasMany(BurnoutSelfReport::class);
+    }
+
+    public function loginHistories(): HasMany
+    {
+        return $this->hasMany(UserLoginHistory::class);
+    }
+
+    public function latestLoginHistory(): HasOne
+    {
+        return $this->hasOne(UserLoginHistory::class)->latestOfMany('logged_in_at');
     }
 
     /**

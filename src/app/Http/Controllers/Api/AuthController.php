@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\SchoolClass;
 use App\Models\User;
+use App\Models\UserLoginHistory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -27,6 +28,7 @@ class AuthController extends Controller
             'class_id' => ['nullable', 'integer', 'exists:classes,id'],
             'class_name' => ['nullable', 'string', 'max:80'],
             'student_verification_code' => ['nullable', 'string', 'max:24', 'required_if:role,parent'],
+            ...$this->deviceValidationRules(),
         ]);
 
         if ($validator->fails()) {
@@ -62,7 +64,7 @@ class AuthController extends Controller
             return [$user, $student];
         });
 
-        $token = $user->createToken('mindfuledu-mobile')->plainTextToken;
+        $token = $this->issueLoginToken($user, $request, $role);
 
         return response()->json([
             'user' => $this->formatUser($user),
@@ -76,6 +78,7 @@ class AuthController extends Controller
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
             'role' => ['required', Rule::in(['teacher', 'student', 'parent'])],
+            ...$this->deviceValidationRules(),
         ]);
 
         if ($validator->fails()) {
@@ -91,7 +94,7 @@ class AuthController extends Controller
 
         $this->ensureRoleAccess($user, $data['role']);
 
-        $token = $user->createToken('mindfuledu-mobile')->plainTextToken;
+        $token = $this->issueLoginToken($user, $request, $data['role']);
 
         return response()->json([
             'user' => $this->formatUser($user),
@@ -104,6 +107,7 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'id_token' => ['required', 'string'],
             'role' => ['required', Rule::in(['teacher', 'student', 'parent'])],
+            ...$this->deviceValidationRules(),
         ]);
 
         if ($validator->fails()) {
@@ -146,7 +150,7 @@ class AuthController extends Controller
 
         $this->ensureRoleAccess($user, $data['role']);
 
-        $token = $user->createToken('mindfuledu-mobile')->plainTextToken;
+        $token = $this->issueLoginToken($user, $request, $data['role']);
 
         return response()->json([
             'user' => $this->formatUser($user),
@@ -262,7 +266,11 @@ class AuthController extends Controller
 
     private function formatUser(User $user): array
     {
-        $user->loadMissing('roles', 'schoolClass', 'parentChildren');
+        $user->loadMissing('roles', 'schoolClass', 'parentChildren', 'latestLoginHistory');
+        $loginHistories = $user->loginHistories()
+            ->latest('logged_in_at')
+            ->limit(8)
+            ->get();
 
         if ($user->isStudent() && ! $user->student_verification_code) {
             $user->forceFill(['student_verification_code' => $this->newStudentVerificationCode()])->save();
@@ -276,6 +284,10 @@ class AuthController extends Controller
             'avatar_url' => $this->avatarUrl($user),
             'role' => $user->roles->first()?->name,
             'profile_completed' => (bool) $user->profile_completed,
+            'latest_login' => $this->formatLoginHistory($user->latestLoginHistory),
+            'login_histories' => $loginHistories
+                ->map(fn (UserLoginHistory $history) => $this->formatLoginHistory($history))
+                ->values(),
             'student_verification_code' => $user->isStudent() ? $user->student_verification_code : null,
             'class' => $user->schoolClass ? [
                 'id' => $user->schoolClass->id,
@@ -292,6 +304,92 @@ class AuthController extends Controller
                     ] : null,
                 ])->values()
                 : [],
+        ];
+    }
+
+    private function issueLoginToken(User $user, Request $request, string $role): string
+    {
+        $activeTokenCount = $user->tokens()->count();
+        $user->tokens()->delete();
+
+        $token = $user->createToken('mindfuledu-mobile')->plainTextToken;
+        $device = $this->devicePayload($request);
+
+        $user->loginHistories()->create([
+            'role' => $role,
+            'device_id' => $device['device_id'],
+            'device_name' => $device['device_name'],
+            'device_brand' => $device['device_brand'],
+            'device_model' => $device['device_model'],
+            'device_platform' => $device['device_platform'],
+            'ip_address' => $request->ip(),
+            'location' => 'Jakarta',
+            'logged_in_at' => now(),
+            'revoked_previous_sessions' => $activeTokenCount > 0,
+        ]);
+
+        return $token;
+    }
+
+    private function deviceValidationRules(): array
+    {
+        return [
+            'device_id' => ['nullable', 'string', 'max:255'],
+            'device_name' => ['nullable', 'string', 'max:255'],
+            'device_brand' => ['nullable', 'string', 'max:255'],
+            'device_model' => ['nullable', 'string', 'max:255'],
+            'device_platform' => ['nullable', 'string', 'max:64'],
+        ];
+    }
+
+    private function devicePayload(Request $request): array
+    {
+        $deviceName = trim((string) $request->input('device_name', ''));
+        $deviceBrand = trim((string) $request->input('device_brand', ''));
+        $deviceModel = trim((string) $request->input('device_model', ''));
+
+        return [
+            'device_id' => $request->input('device_id'),
+            'device_name' => $deviceName !== '' ? $deviceName : $this->deviceNameFromUserAgent($request),
+            'device_brand' => $deviceBrand !== '' ? $deviceBrand : null,
+            'device_model' => $deviceModel !== '' ? $deviceModel : null,
+            'device_platform' => $request->input('device_platform') ?: 'unknown',
+        ];
+    }
+
+    private function deviceNameFromUserAgent(Request $request): string
+    {
+        $userAgent = (string) $request->userAgent();
+
+        if (str_contains($userAgent, 'Android')) {
+            return 'Android Device';
+        }
+
+        if (str_contains($userAgent, 'iPhone')) {
+            return 'iPhone';
+        }
+
+        return 'Perangkat tidak dikenal';
+    }
+
+    private function formatLoginHistory(?UserLoginHistory $history): ?array
+    {
+        if (! $history) {
+            return null;
+        }
+
+        return [
+            'id' => $history->id,
+            'role' => $history->role,
+            'device_id' => $history->device_id,
+            'device_name' => $history->device_name,
+            'device_brand' => $history->device_brand,
+            'device_model' => $history->device_model,
+            'device_platform' => $history->device_platform,
+            'ip_address' => $history->ip_address,
+            'location' => $history->location,
+            'logged_in_at' => $history->logged_in_at?->toIso8601String(),
+            'revoked_previous_sessions' => (bool) $history->revoked_previous_sessions,
         ];
     }
 

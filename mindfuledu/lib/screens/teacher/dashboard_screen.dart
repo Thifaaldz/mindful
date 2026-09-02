@@ -8,6 +8,7 @@ import '../../core/app_theme.dart';
 import '../../core/dashboard_refresh.dart';
 import '../../core/session.dart';
 import '../../widgets/app_chrome.dart';
+import '../../widgets/login_history_widgets.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -93,7 +94,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           'Ringkasan activity ledger hari ini',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
-                        const SizedBox(height: 26),
+                        const SizedBox(height: 8),
+                        LastLoginCaption(
+                          login: loginHistoryMap(user?['latest_login']),
+                          color: AppTheme.olive,
+                        ),
+                        const SizedBox(height: 20),
                         _HeroStartCard(onTap: () => requestTeacherTab(1)),
                         const SizedBox(height: 28),
                         _StatsRow(summary: summary),

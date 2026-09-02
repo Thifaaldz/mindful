@@ -51,6 +51,7 @@ class ApiClient {
 
   String? _token;
   String _activeBaseUrl = _preferredBaseUrl();
+  void Function()? onUnauthorized;
 
   String? get token => _token;
 
@@ -176,7 +177,7 @@ class ApiClient {
     final decoded = raw.isEmpty ? null : jsonDecode(raw);
 
     if (response.statusCode >= 400) {
-      throw _mapError(decoded);
+      throw _mapError(response.statusCode, decoded);
     }
 
     return ApiResponse(response.statusCode, decoded);
@@ -236,7 +237,7 @@ class ApiClient {
     final decoded = raw.isEmpty ? null : jsonDecode(raw);
 
     if (response.statusCode >= 400) {
-      throw _mapError(decoded);
+      throw _mapError(response.statusCode, decoded);
     }
 
     return ApiResponse(response.statusCode, decoded);
@@ -278,13 +279,24 @@ class ApiClient {
         RegExp(r'^172\.(1[6-9]|2[0-9]|3[0-1])\.').hasMatch(host);
   }
 
-  ApiException _mapError(dynamic data) {
+  ApiException _mapError(int statusCode, dynamic data) {
+    final remoteLogout = statusCode == 401 && _token != null;
+    if (remoteLogout) {
+      onUnauthorized?.call();
+    }
+
     if (data is Map<String, dynamic>) {
-      final message = data['message'] as String? ?? 'Terjadi kesalahan';
+      final message = remoteLogout
+          ? 'Sesi akun dipindahkan ke perangkat lain, silakan login ulang'
+          : data['message'] as String? ?? 'Terjadi kesalahan';
       final errors = data['errors'] as Map<String, dynamic>?;
       return ApiException(message, errors: errors);
     }
-    return ApiException('Terjadi kesalahan');
+    return ApiException(
+      remoteLogout
+          ? 'Sesi akun dipindahkan ke perangkat lain, silakan login ulang'
+          : 'Terjadi kesalahan',
+    );
   }
 }
 
