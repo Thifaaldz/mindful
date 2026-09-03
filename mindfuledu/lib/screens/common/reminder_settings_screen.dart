@@ -65,9 +65,31 @@ class _ReminderSettingsScreenState extends State<ReminderSettingsScreen> {
         timezone: _timezone,
       );
 
-      if (_enabled && _channel == 'push') {
-        await ReminderService.scheduleDaily(_time);
-      } else {
+      final notificationScheduled = _enabled && _channel == 'push'
+          ? await ReminderService.scheduleDaily(_time)
+          : false;
+      final pendingCount = notificationScheduled
+          ? await ReminderService.pendingCount()
+          : 0;
+      final pushSuffix = _channel == 'push'
+          ? ' ($pendingCount jadwal aktif)'
+          : '';
+
+      if (_enabled && _channel == 'push' && !notificationScheduled) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Notifikasi belum diizinkan di HP. Aktifkan permission notifikasi untuk MindfulEdu.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      if (_enabled && _channel != 'push') {
+        await ReminderService.cancelDaily();
+      } else if (!_enabled) {
         await ReminderService.cancelDaily();
       }
 
@@ -76,7 +98,7 @@ class _ReminderSettingsScreenState extends State<ReminderSettingsScreen> {
         SnackBar(
           content: Text(
             _enabled
-                ? 'Pengingat $_channel aktif pukul $time'
+                ? 'Pengingat $_channel aktif pukul $time$pushSuffix'
                 : 'Pengingat dimatikan',
           ),
         ),
@@ -87,6 +109,12 @@ class _ReminderSettingsScreenState extends State<ReminderSettingsScreen> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menjadwalkan pengingat: $e')),
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);

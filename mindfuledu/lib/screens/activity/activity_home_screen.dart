@@ -27,6 +27,7 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
   late Future<_ActivityBundle> _future;
   _ActivityBundle? _lastBundle;
   final Map<String, Map<Object, Map<String, dynamic>>> _optimisticByDate = {};
+  final Set<String> _scheduledReminderKeys = {};
   int _optimisticId = -1;
   int _refreshGeneration = 0;
   int _mutationGeneration = 0;
@@ -100,9 +101,10 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
     _visibleDate = date;
     _visibleActivities = (mergedBundle.data['activities'] as List? ?? [])
         .map((item) => _jsonMap(item))
-        .where((item) => item['id'] != null)
+        .where((item) => item['id'] != null && !_isCancelledActivity(item))
         .toList();
     _visibleSummary = _jsonMap(mergedBundle.data['summary']);
+    _syncActivityReminders(_visibleActivities);
   }
 
   void _reload({bool background = false, bool notify = true}) {
@@ -238,14 +240,21 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
       context: context,
       isScrollControlled: true,
       builder: (_) =>
-          _ClassroomObservationSheet(activityId: activity['id'] as int),
+          _ClassroomObservationSheet(activityId: _intId(activity['id'])),
     );
   }
 
   Future<void> _cancel(Map<String, dynamic> activity) async {
+    final id = activity['id'];
+    if (_isTemporaryId(id)) {
+      _applyActivities([activity], remove: true);
+      _snack('Aktivitas sementara dibatalkan.');
+      return;
+    }
+
     try {
-      await Api.cancelActivity(activity['id'] as int);
-      await ReminderService.cancelActivity(activity['id'] as int);
+      await Api.cancelActivity(_intId(id));
+      await ReminderService.cancelActivity(_intId(id));
       _applyActivities([activity], remove: true);
       requestAnalysisRefresh();
       _reload(background: true);
@@ -257,7 +266,7 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
   Future<void> _duplicate(Map<String, dynamic> activity) async {
     try {
       final duplicate = await Api.duplicateActivity(
-        activity['id'] as int,
+        _intId(activity['id']),
         activityDate: _dateParam,
       );
       await _scheduleReminderFromActivity(_jsonMap(duplicate));
@@ -283,8 +292,11 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
       final response = await result.request;
       if (!mounted) return;
 
-      if (result.optimisticActivities.isNotEmpty) {
-        _applyActivities(result.optimisticActivities, remove: true);
+      final temporaryActivities = result.optimisticActivities
+          .where((activity) => _isTemporaryId(activity['id']))
+          .toList();
+      if (temporaryActivities.isNotEmpty) {
+        _applyActivities(temporaryActivities, remove: true);
       }
       _applyActivityResponse(response, editedActivity: editedActivity);
       requestAnalysisRefresh();
@@ -299,8 +311,11 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
       _reload(background: true);
     } on Object catch (error) {
       if (!mounted) return;
-      if (result.optimisticActivities.isNotEmpty) {
-        _applyActivities(result.optimisticActivities, remove: true);
+      final temporaryActivities = result.optimisticActivities
+          .where((activity) => _isTemporaryId(activity['id']))
+          .toList();
+      if (temporaryActivities.isNotEmpty) {
+        _applyActivities(temporaryActivities, remove: true);
       }
       if (result.rollbackActivities.isNotEmpty) {
         _applyActivities(result.rollbackActivities);
@@ -357,12 +372,43 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
       final movedFromOldDate = updates.every(
         (item) => _activityDateKey(item['activity_date']) != oldDate,
       );
-      if (movedFromOldDate) {
+      if (oldDate.isNotEmpty && movedFromOldDate) {
         _rememberOptimisticActivities([editedActivity], remove: true);
       }
     }
 
-    _applyActivities(updates);
+    _forgetOptimisticActivities([?editedActivity, ...updates]);
+    _applyActivities(
+      updates,
+      replaceActivities: editedActivity == null ? const [] : [editedActivity],
+    );
+  }
+
+  void _syncActivityReminders(List<Map<String, dynamic>> activities) {
+    for (final activity in activities) {
+      final id = activity['id'];
+      if (_isTemporaryId(id)) continue;
+
+      final startAt = DateTime.tryParse('${activity['start_at']}');
+      final endAt = DateTime.tryParse('${activity['end_at']}');
+      if (id == null || startAt == null || endAt == null) continue;
+
+      final key =
+          '${_activityIdKey(id)}|${startAt.toIso8601String()}|'
+          '${endAt.toIso8601String()}';
+      if (_scheduledReminderKeys.contains(key)) continue;
+
+      _scheduledReminderKeys.removeWhere(
+        (item) => item.startsWith('${_activityIdKey(id)}|'),
+      );
+      _scheduledReminderKeys.add(key);
+
+      unawaited(
+        _scheduleReminderFromActivity(activity).catchError((_) {
+          _scheduledReminderKeys.remove(key);
+        }),
+      );
+    }
   }
 
   List<Map<String, dynamic>> _activitiesFromResponse(
@@ -380,6 +426,24 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
     return activity['id'] == null ? [] : [activity];
   }
 
+  void _forgetOptimisticActivities(List<Map<String, dynamic>> activities) {
+    if (activities.isEmpty || _optimisticByDate.isEmpty) return;
+
+    final removeDates = <String>[];
+    for (final dateEntry in _optimisticByDate.entries) {
+      dateEntry.value.removeWhere(
+        (_, item) => activities.any(
+          (activity) => _matchesActivityIdentity(item, activity),
+        ),
+      );
+      if (dateEntry.value.isEmpty) removeDates.add(dateEntry.key);
+    }
+
+    for (final date in removeDates) {
+      _optimisticByDate.remove(date);
+    }
+  }
+
   void _rememberOptimisticActivities(
     List<Map<String, dynamic>> updates, {
     bool remove = false,
@@ -387,6 +451,10 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
     for (final update in updates) {
       final id = update['id'];
       if (id == null) continue;
+      if (!remove) {
+        _forgetOptimisticActivities([update]);
+      }
+      final idKey = _activityIdKey(id);
       final date = _activityDateKey(update['activity_date']);
       if (date.isEmpty) continue;
 
@@ -395,12 +463,12 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
         () => <Object, Map<String, dynamic>>{},
       );
       if (remove && _isTemporaryId(id)) {
-        byId.remove(id);
+        byId.remove(idKey);
         if (byId.isEmpty) _optimisticByDate.remove(date);
         continue;
       }
 
-      byId[id] = remove ? {...update, 'status': 'cancelled'} : update;
+      byId[idKey] = remove ? {...update, 'status': 'cancelled'} : update;
     }
   }
 
@@ -416,7 +484,9 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
     for (final item in data['activities'] as List? ?? []) {
       final activity = _jsonMap(item);
       final id = activity['id'];
-      if (id != null) byId[id] = activity;
+      if (id != null && !_isCancelledActivity(activity)) {
+        byId[_activityIdKey(id)] = activity;
+      }
     }
 
     for (final entry in optimistic.entries) {
@@ -451,6 +521,7 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
   void _applyActivities(
     List<Map<String, dynamic>> updates, {
     bool remove = false,
+    List<Map<String, dynamic>> replaceActivities = const [],
   }) {
     if (!mounted) return;
     _mutationGeneration++;
@@ -467,8 +538,16 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
                 ? _visibleActivities
                 : (data['activities'] as List? ?? []))
             .map((item) => _jsonMap(item))
-            .where((item) => item['id'] != null)
+            .where((item) => item['id'] != null && !_isCancelledActivity(item))
             .toList();
+
+    if (replaceActivities.isNotEmpty) {
+      current.removeWhere(
+        (item) => replaceActivities.any(
+          (oldActivity) => _matchesActivityIdentity(item, oldActivity),
+        ),
+      );
+    }
 
     for (final update in updates) {
       final id = update['id'];
@@ -476,7 +555,7 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
       final fingerprint = _activityFingerprint(update);
       current.removeWhere(
         (item) =>
-            item['id'] == id ||
+            _sameActivityId(item['id'], id) ||
             ((_isTemporaryId(item['id']) || _isTemporaryId(id)) &&
                 _activityFingerprint(item) == fingerprint),
       );
@@ -533,6 +612,7 @@ class _ActivityHomeScreenState extends State<ActivityHomeScreen> {
             final data = bundle?.data ?? <String, dynamic>{};
             final dataActivities = (data['activities'] as List? ?? [])
                 .map((item) => _jsonMap(item))
+                .where((item) => !_isCancelledActivity(item))
                 .toList();
             final activities = _visibleDate == _dateParam
                 ? _visibleActivities
@@ -845,6 +925,7 @@ class _ActivityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final role = AccountRole.byId(context.watch<Session>().role);
+    final hasServerId = !_isTemporaryId(activity['id']);
     final kindText = _activityKindLabel(
       '${activity['activity_kind'] ?? activity['category'] ?? ''}'.trim(),
     );
@@ -858,10 +939,12 @@ class _ActivityCard extends StatelessWidget {
         !isStudentClassroom || gate['teacher_checkout_available'] == true;
     final gateMessage = '${gate['message'] ?? ''}'.trim();
     final canCheckIn =
+        hasServerId &&
         activity['checkin_at'] == null &&
         status != 'cancelled' &&
         teacherCheckinReady;
     final canCheckOut =
+        hasServerId &&
         activity['checkin_at'] != null &&
         activity['checkout_at'] == null &&
         status != 'cancelled' &&
@@ -964,14 +1047,23 @@ class _ActivityCard extends StatelessWidget {
               ),
               PopupMenuButton<String>(
                 onSelected: (value) {
+                  if (!hasServerId && value != 'cancel') return;
                   if (value == 'edit') onEdit();
                   if (value == 'duplicate') onDuplicate();
                   if (value == 'cancel') onCancel();
                 },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(value: 'edit', child: Text('Edit')),
-                  PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
-                  PopupMenuItem(value: 'cancel', child: Text('Cancel')),
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'edit',
+                    enabled: hasServerId,
+                    child: const Text('Edit'),
+                  ),
+                  PopupMenuItem(
+                    value: 'duplicate',
+                    enabled: hasServerId,
+                    child: const Text('Duplicate'),
+                  ),
+                  const PopupMenuItem(value: 'cancel', child: Text('Cancel')),
                 ],
               ),
             ],
@@ -1332,7 +1424,7 @@ class _JoinClassroomSheetState extends State<_JoinClassroomSheet> {
                       final activity = _jsonMap(activities[index]);
                       final teacher = _jsonMap(activity['teacher']);
                       final schoolClass = _jsonMap(activity['class']);
-                      final id = activity['id'] as int;
+                      final id = _intId(activity['id']);
                       final joining = _joiningId == id;
                       final className =
                           '${schoolClass['name'] ?? 'Semua siswa sekolah'}';
@@ -1599,7 +1691,7 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
       if (_editing) {
         final optimistic = _optimisticEditedActivity();
         final request = Api.updateActivity(
-          activityId: widget.activity!['id'] as int,
+          activityId: _intId(widget.activity!['id']),
           title: optimistic['title'] as String,
           activityDate: optimistic['activity_date'] as String,
           startTime: _apiTime(_start),
@@ -2142,7 +2234,7 @@ class _WellbeingSheetState extends State<_WellbeingSheet> {
         }
 
         final request = Api.checkOutActivity(
-          activityId: widget.activity['id'] as int,
+          activityId: _intId(widget.activity['id']),
           mood: _checkoutMood,
           fact: fact.isEmpty ? null : fact,
           feeling: feeling.isEmpty ? null : feeling,
@@ -2163,7 +2255,7 @@ class _WellbeingSheetState extends State<_WellbeingSheet> {
       } else {
         final trigger = _triggerController.text.trim();
         final request = Api.checkInActivity(
-          activityId: widget.activity['id'] as int,
+          activityId: _intId(widget.activity['id']),
           mood: _checkinMood,
           intensity: _checkinMood == null ? null : _checkinIntensity.round(),
           trigger: trigger.isEmpty ? null : trigger,
@@ -2557,8 +2649,38 @@ double _numValue(dynamic value, {double fallback = 0}) {
   return double.tryParse('$value') ?? fallback;
 }
 
+String _activityIdKey(Object? id) => '$id';
+
+bool _sameActivityId(Object? left, Object? right) {
+  return left != null &&
+      right != null &&
+      _activityIdKey(left) == _activityIdKey(right);
+}
+
+bool _matchesActivityIdentity(
+  Map<String, dynamic> activity,
+  Map<String, dynamic> target,
+) {
+  return _sameActivityId(activity['id'], target['id']) ||
+      _activityFingerprint(activity) == _activityFingerprint(target);
+}
+
+bool _isCancelledActivity(Map<String, dynamic> activity) {
+  return '${activity['status'] ?? ''}' == 'cancelled';
+}
+
+int _intId(Object? id) {
+  if (id is int) return id;
+  final parsed = int.tryParse('$id');
+  if (parsed == null) {
+    throw ApiException('ID aktivitas tidak valid.');
+  }
+  return parsed;
+}
+
 bool _isTemporaryId(Object? id) {
-  return id is int && id < 0;
+  if (id is int) return id < 0;
+  return int.tryParse('$id')?.isNegative ?? false;
 }
 
 String _activityFingerprint(Map<String, dynamic> activity) {

@@ -12,8 +12,17 @@ class ReminderService {
   static const int _activityReminderBase = 200000;
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
+  static Future<void>? _initializing;
+  static bool _didInitialize = false;
 
-  static Future<void> initialize() async {
+  static Future<void> initialize() {
+    if (_didInitialize) return Future.value();
+    return _initializing ??= _initialize().whenComplete(() {
+      if (!_didInitialize) _initializing = null;
+    });
+  }
+
+  static Future<void> _initialize() async {
     tz.initializeTimeZones();
     try {
       final timezone = await FlutterTimezone.getLocalTimezone();
@@ -22,7 +31,7 @@ class ReminderService {
       tz.setLocalLocation(tz.getLocation('Asia/Jakarta'));
     }
 
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const android = AndroidInitializationSettings('ic_notification_leaf');
     const ios = DarwinInitializationSettings();
 
     await _notifications.initialize(
@@ -32,36 +41,45 @@ class ReminderService {
         macOS: ios,
       ),
     );
+    _didInitialize = true;
   }
 
-  static Future<void> requestPermission() async {
+  static Future<bool> requestPermission() async {
+    await initialize();
+
     if (kIsWeb) {
-      return;
+      return true;
     }
 
     if (defaultTargetPlatform == TargetPlatform.android) {
-      await _notifications
+      final android = _notifications
           .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin
-          >()
-          ?.requestNotificationsPermission();
+          >();
+      final requested = await android?.requestNotificationsPermission();
+      final enabled = await android?.areNotificationsEnabled();
+      return enabled ?? requested ?? true;
     } else if (defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.macOS) {
-      await _notifications
+      final ios = await _notifications
           .resolvePlatformSpecificImplementation<
             IOSFlutterLocalNotificationsPlugin
           >()
           ?.requestPermissions(alert: true, badge: true, sound: true);
-      await _notifications
+      final macos = await _notifications
           .resolvePlatformSpecificImplementation<
             MacOSFlutterLocalNotificationsPlugin
           >()
           ?.requestPermissions(alert: true, badge: true, sound: true);
+      return ios ?? macos ?? true;
     }
+
+    return true;
   }
 
-  static Future<void> scheduleDaily(TimeOfDay time) async {
-    await requestPermission();
+  static Future<bool> scheduleDaily(TimeOfDay time) async {
+    final permitted = await requestPermission();
+    if (!permitted) return false;
     await cancelDaily();
 
     await _notifications.zonedSchedule(
@@ -83,9 +101,12 @@ class ReminderService {
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       matchDateTimeComponents: DateTimeComponents.time,
     );
+
+    return true;
   }
 
-  static Future<void> cancelDaily() {
+  static Future<void> cancelDaily() async {
+    await initialize();
     return _notifications.cancel(id: _dailyReminderId);
   }
 
@@ -95,7 +116,8 @@ class ReminderService {
     required DateTime startAt,
     required DateTime endAt,
   }) async {
-    await requestPermission();
+    final permitted = await requestPermission();
+    if (!permitted) return;
     await cancelActivity(activityId);
 
     final now = DateTime.now();
@@ -144,8 +166,15 @@ class ReminderService {
   }
 
   static Future<void> cancelActivity(int activityId) async {
+    await initialize();
     await _notifications.cancel(id: _activityNotificationId(activityId, 0));
     await _notifications.cancel(id: _activityNotificationId(activityId, 1));
+  }
+
+  static Future<int> pendingCount() async {
+    await initialize();
+    final pending = await _notifications.pendingNotificationRequests();
+    return pending.length;
   }
 
   static tz.TZDateTime _nextInstance(TimeOfDay time) {

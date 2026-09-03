@@ -5,6 +5,10 @@ db/data/*
 # Build artifacts and downloadable binaries should not be committed to GitHub.
 /src/public/downloads/*.apk
 
+# Local deployment guides may contain server-specific commands or credentials.
+/docs/DEPLOYMENT.md
+/docs/UPDATE_SERVER_AND_APK.md
+
 # Local machine and secret files.
 .DS_Store
 .env
