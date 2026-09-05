@@ -34,8 +34,16 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
         'email',
         'password',
         'school',
+        'school_id',
         'class_id',
         'student_verification_code',
+        'approval_status',
+        'approved_at',
+        'approved_by',
+        'rejected_at',
+        'rejected_by',
+        'rejection_reason',
+        'must_change_password',
         'profile_completed',
         'reminder_enabled',
         'reminder_time',
@@ -65,6 +73,9 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'profile_completed' => 'boolean',
+            'approved_at' => 'datetime',
+            'rejected_at' => 'datetime',
+            'must_change_password' => 'boolean',
             'reminder_enabled' => 'boolean',
             'last_reminder_sent_at' => 'datetime',
         ];
@@ -85,7 +96,18 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
 
     public function canAccessPanel(Panel $panel): bool
     {
+        if ($panel->getId() === 'school') {
+            return $this->hasRole('school_admin')
+                && $this->school_id !== null
+                && $this->schoolModel?->status === School::STATUS_APPROVED;
+        }
+
         return $this->hasRole(['super_admin', 'admin']);
+    }
+
+    public function schoolModel(): BelongsTo
+    {
+        return $this->belongsTo(School::class, 'school_id');
     }
 
     /**
@@ -194,5 +216,10 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
     public function isParent(): bool
     {
         return $this->hasRole('parent');
+    }
+
+    public function isSchoolAdmin(): bool
+    {
+        return $this->hasRole('school_admin');
     }
 }

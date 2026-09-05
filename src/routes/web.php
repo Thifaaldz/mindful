@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\SchoolRegistrationController;
 use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
 use Illuminate\Support\Facades\Response;
@@ -26,6 +27,11 @@ Route::get('/', function () {
 
     return view('welcome', ['apkSize' => $apkSize]);
 });
+
+Route::get('/register-school', [SchoolRegistrationController::class, 'create'])
+    ->name('schools.register.create');
+Route::post('/register-school', [SchoolRegistrationController::class, 'store'])
+    ->name('schools.register.store');
 
 Route::get('/download/android', function () {
     $apkPath = public_path('downloads/mindfuledu.apk');

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\School;
 use App\Models\SchoolClass;
 use App\Models\User;
 use App\Models\UserLoginHistory;
@@ -24,6 +25,7 @@ class AuthController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'role' => ['required', Rule::in(['teacher', 'student', 'parent'])],
+            'school_id' => ['nullable', 'integer', 'exists:schools,id', 'required_if:role,teacher,student'],
             'school' => ['nullable', 'string', 'max:255', 'required_if:role,parent'],
             'class_id' => ['nullable', 'integer', 'exists:classes,id'],
             'class_name' => ['nullable', 'string', 'max:80'],
@@ -47,9 +49,11 @@ class AuthController extends Controller
                 'name' => $data['name'] ?? Str::of($data['email'])->before('@')->replace('.', ' ')->title()->toString(),
                 'email' => $data['email'],
                 'password' => Hash::make($data['password']),
-                'school' => $data['school'] ?? null,
+                'school_id' => $data['school_id'] ?? null,
+                'school' => $this->schoolNameFor($data),
                 'class_id' => $role === 'student' ? $this->resolveStudentClassId($data) : null,
                 'student_verification_code' => $role === 'student' ? $this->newStudentVerificationCode() : null,
+                'approval_status' => in_array($role, ['teacher', 'student'], true) ? 'pending' : 'approved',
                 'profile_completed' => filled($role) && filled($data['name'] ?? null),
             ]);
 
@@ -63,6 +67,13 @@ class AuthController extends Controller
 
             return [$user, $student];
         });
+
+        if (in_array($role, ['teacher', 'student'], true) && $user->approval_status === 'pending') {
+            return response()->json([
+                'message' => 'Pendaftaran berhasil. Akun menunggu approval Admin Sekolah.',
+                'user' => $this->formatUser($user),
+            ], 202);
+        }
 
         $token = $this->issueLoginToken($user, $request, $role);
 
@@ -93,6 +104,7 @@ class AuthController extends Controller
         }
 
         $this->ensureRoleAccess($user, $data['role']);
+        $this->ensureApprovedMobileAccess($user);
 
         $token = $this->issueLoginToken($user, $request, $data['role']);
 
@@ -149,6 +161,7 @@ class AuthController extends Controller
         $user->save();
 
         $this->ensureRoleAccess($user, $data['role']);
+        $this->ensureApprovedMobileAccess($user);
 
         $token = $this->issueLoginToken($user, $request, $data['role']);
 
@@ -175,6 +188,7 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:255'],
             'role' => ['required', Rule::in(['teacher', 'student', 'parent'])],
+            'school_id' => ['nullable', 'integer', 'exists:schools,id'],
             'school' => ['nullable', 'string', 'max:255', 'required_if:role,parent'],
             'class_id' => ['nullable', 'integer', 'exists:classes,id'],
             'class_name' => ['nullable', 'string', 'max:80'],
@@ -191,21 +205,31 @@ class AuthController extends Controller
         $this->ensureRoleAccess($user, $data['role']);
 
         DB::transaction(function () use ($user, $data) {
+            $role = $data['role'];
+            $schoolId = in_array($role, ['teacher', 'student'], true)
+                ? ($data['school_id'] ?? $user->school_id)
+                : null;
+            $profileData = array_replace($data, ['school_id' => $schoolId]);
+
             $student = $data['role'] === 'parent'
                 ? $this->studentForParentCode($data['student_verification_code'] ?? null, $data['school'] ?? null)
                 : null;
 
             $user->forceFill([
                 'name' => $data['name'],
-                'school' => $data['school'] ?? null,
-                'class_id' => $data['role'] === 'student' ? $this->resolveStudentClassId($data) : null,
-                'student_verification_code' => $data['role'] === 'student'
+                'school_id' => $schoolId,
+                'school' => $this->schoolNameFor($profileData),
+                'class_id' => $role === 'student' ? $this->resolveStudentClassId($profileData) : null,
+                'student_verification_code' => $role === 'student'
                     ? ($user->student_verification_code ?: $this->newStudentVerificationCode())
                     : null,
+                'approval_status' => in_array($role, ['teacher', 'student'], true)
+                    ? ((int) $user->school_id === (int) $schoolId && $user->approval_status === 'approved' ? 'approved' : 'pending')
+                    : 'approved',
                 'profile_completed' => true,
             ])->save();
 
-            $user->syncRoles([$data['role']]);
+            $user->syncRoles([$role]);
 
             if ($student) {
                 $user->parentChildren()->syncWithoutDetaching([
@@ -266,7 +290,7 @@ class AuthController extends Controller
 
     private function formatUser(User $user): array
     {
-        $user->loadMissing('roles', 'schoolClass', 'parentChildren', 'latestLoginHistory');
+        $user->loadMissing('roles', 'schoolModel', 'schoolClass', 'parentChildren', 'latestLoginHistory');
         $loginHistories = $user->loginHistories()
             ->latest('logged_in_at')
             ->limit(8)
@@ -280,9 +304,19 @@ class AuthController extends Controller
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
+            'school_id' => $user->school_id,
             'school' => $user->school,
+            'school_model' => $user->schoolModel ? [
+                'id' => $user->schoolModel->id,
+                'name' => $user->schoolModel->name,
+                'npsn' => $user->schoolModel->npsn,
+                'city' => $user->schoolModel->city,
+                'province' => $user->schoolModel->province,
+            ] : null,
             'avatar_url' => $this->avatarUrl($user),
             'role' => $user->roles->first()?->name,
+            'approval_status' => $user->approval_status ?? 'approved',
+            'must_change_password' => (bool) $user->must_change_password,
             'profile_completed' => (bool) $user->profile_completed,
             'latest_login' => $this->formatLoginHistory($user->latestLoginHistory),
             'login_histories' => $loginHistories
@@ -292,6 +326,7 @@ class AuthController extends Controller
             'class' => $user->schoolClass ? [
                 'id' => $user->schoolClass->id,
                 'name' => $user->schoolClass->name,
+                'school_id' => $user->schoolClass->school_id,
             ] : null,
             'children' => $user->isParent()
                 ? $user->parentChildren->map(fn (User $student) => [
@@ -411,6 +446,18 @@ class AuthController extends Controller
         );
     }
 
+    private function ensureApprovedMobileAccess(User $user): void
+    {
+        if (! $user->hasAnyRole(['teacher', 'student'])) {
+            return;
+        }
+
+        $status = $user->approval_status ?? 'approved';
+
+        abort_if($status === 'pending', 403, 'Akun Anda masih menunggu approval Admin Sekolah.');
+        abort_if($status === 'rejected', 403, 'Pendaftaran akun Anda ditolak oleh Admin Sekolah.');
+    }
+
     private function avatarUrl(User $user): ?string
     {
         if ($user->avatar_url) {
@@ -435,11 +482,17 @@ class AuthController extends Controller
         if (filled($data['class_id'] ?? null)) {
             $schoolClass = SchoolClass::find($data['class_id']);
             abort_if(
-                $schoolClass && filled($data['school'] ?? null) && filled($schoolClass->school)
-                    && strcasecmp(trim((string) $schoolClass->school), trim((string) $data['school'])) !== 0,
+                ! $schoolClass,
+                422,
+                'Kelas tidak ditemukan.'
+            );
+            abort_if(
+                filled($data['school_id'] ?? null) && $schoolClass->school_id
+                    && (int) $schoolClass->school_id !== (int) $data['school_id'],
                 422,
                 'Kelas harus berada di sekolah yang sama.'
             );
+            abort_if($schoolClass->is_active === false, 422, 'Kelas tidak aktif.');
 
             return (int) $data['class_id'];
         }
@@ -447,6 +500,21 @@ class AuthController extends Controller
         $className = strtoupper(trim((string) ($data['class_name'] ?? '')));
         if ($className === '') {
             return null;
+        }
+
+        if (filled($data['school_id'] ?? null)) {
+            $school = School::approved()->find($data['school_id']);
+            abort_if(! $school, 422, 'Sekolah belum approved atau tidak ditemukan.');
+
+            $schoolClass = SchoolClass::firstOrCreate(
+                ['name' => $className, 'school_id' => $school->id],
+                [
+                    'school' => $school->name,
+                    'grade' => $this->gradeFromClassName($className),
+                ]
+            );
+
+            return $schoolClass->id;
         }
 
         abort_if(blank($data['school'] ?? null), 422, 'Sekolah wajib diisi untuk menyimpan kelas siswa.');
@@ -457,6 +525,18 @@ class AuthController extends Controller
         );
 
         return $schoolClass->id;
+    }
+
+    private function schoolNameFor(array $data): ?string
+    {
+        if (filled($data['school_id'] ?? null)) {
+            $school = School::approved()->find($data['school_id']);
+            abort_if(! $school, 422, 'Sekolah belum approved atau tidak ditemukan.');
+
+            return $school->name;
+        }
+
+        return $data['school'] ?? null;
     }
 
     private function gradeFromClassName(string $className): ?string

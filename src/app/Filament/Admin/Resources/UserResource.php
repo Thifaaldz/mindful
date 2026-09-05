@@ -4,6 +4,7 @@ namespace App\Filament\Admin\Resources;
 
 use App\Filament\Admin\Resources\UserResource\Pages;
 use App\Filament\Admin\Resources\UserResource\RelationManagers\LoginHistoriesRelationManager;
+use App\Models\School;
 use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -19,7 +20,7 @@ class UserResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-user-group';
 
-    protected static ?string $navigationGroup = 'Administration';
+    protected static ?string $navigationGroup = 'Pengguna';
 
     protected static ?string $recordTitleAttribute = 'name';
 
@@ -69,14 +70,35 @@ class UserResource extends Resource
                             ->prefixIcon('heroicon-m-envelope')
                             ->columnSpan('full')
                             ->email(),
-                        Forms\Components\TextInput::make('school')
+                        Forms\Components\Select::make('school_id')
                             ->label('Sekolah')
-                            ->maxLength(255),
+                            ->options(fn () => School::approved()->orderBy('name')->pluck('name', 'id'))
+                            ->searchable()
+                            ->preload()
+                            ->afterStateUpdated(function ($state, Forms\Set $set) {
+                                $set('school', School::find($state)?->name);
+                            }),
+                        Forms\Components\TextInput::make('school')
+                            ->label('Sekolah Legacy')
+                            ->maxLength(255)
+                            ->helperText('Diisi otomatis dari School jika tersedia.'),
                         Forms\Components\Select::make('class_id')
                             ->label('Kelas (untuk siswa)')
-                            ->relationship('schoolClass', 'name')
+                            ->options(fn (Forms\Get $get) => \App\Models\SchoolClass::query()
+                                ->when($get('school_id'), fn ($query, $schoolId) => $query->where('school_id', $schoolId))
+                                ->orderBy('name')
+                                ->pluck('name', 'id'))
                             ->searchable()
                             ->preload(),
+                        Forms\Components\Select::make('approval_status')
+                            ->label('Status Approval')
+                            ->options([
+                                'pending' => 'Pending',
+                                'approved' => 'Approved',
+                                'rejected' => 'Rejected',
+                            ])
+                            ->default('approved')
+                            ->required(),
 
                         Forms\Components\TextInput::make('password')
                             ->password()
@@ -128,9 +150,22 @@ class UserResource extends Resource
                 Tables\Columns\TextColumn::make('school')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->searchable(),
+                Tables\Columns\TextColumn::make('schoolModel.name')
+                    ->label('Sekolah')
+                    ->searchable()
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('schoolClass.name')
                     ->label('Kelas')
                     ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('approval_status')
+                    ->label('Approval')
+                    ->badge()
+                    ->color(fn (?string $state): string => match ($state) {
+                        'approved' => 'success',
+                        'rejected' => 'danger',
+                        'pending' => 'warning',
+                        default => 'gray',
+                    }),
                 Tables\Columns\TextColumn::make('latestLoginHistory.logged_in_at')
                     ->label('Last Login')
                     ->dateTime('d M Y H:i')
@@ -149,6 +184,16 @@ class UserResource extends Resource
                 Tables\Filters\SelectFilter::make('roles')
                     ->relationship('roles', 'name')
                     ->label('Role'),
+                Tables\Filters\SelectFilter::make('school_id')
+                    ->label('Sekolah')
+                    ->options(fn () => School::orderBy('name')->pluck('name', 'id')),
+                Tables\Filters\SelectFilter::make('approval_status')
+                    ->label('Approval')
+                    ->options([
+                        'pending' => 'Pending',
+                        'approved' => 'Approved',
+                        'rejected' => 'Rejected',
+                    ]),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),

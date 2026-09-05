@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/account_role.dart';
+import '../../core/api.dart';
 import '../../core/api_client.dart';
 import '../../core/google_auth_service.dart';
 import '../../core/session.dart';
@@ -23,12 +24,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordConfirmController = TextEditingController();
   final _schoolController = TextEditingController();
   final _studentCodeController = TextEditingController();
+  late Future<List<dynamic>> _schoolsFuture;
+  Future<List<dynamic>>? _classesFuture;
+  int? _selectedSchoolId;
+  int? _selectedClassId;
   bool _loading = false;
   bool _googleLoading = false;
   bool _rememberDevice = true;
   String? _error;
 
   AccountRole get _role => AccountRole.byId(widget.selectedRole);
+
+  @override
+  void initState() {
+    super.initState();
+    _schoolsFuture = Api.publicSchools();
+  }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -42,7 +53,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         password: _passwordController.text,
         passwordConfirmation: _passwordConfirmController.text,
         role: _role.id,
+        schoolId: _role.id == 'teacher' || _role.id == 'student'
+            ? _selectedSchoolId
+            : null,
         school: _role.id == 'parent' ? _schoolController.text.trim() : null,
+        classId: _role.id == 'student' ? _selectedClassId : null,
         studentVerificationCode: _role.id == 'parent'
             ? _studentCodeController.text.trim()
             : null,
@@ -89,6 +104,92 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _schoolController.dispose();
     _studentCodeController.dispose();
     super.dispose();
+  }
+
+  void _selectSchool(int? schoolId) {
+    setState(() {
+      _selectedSchoolId = schoolId;
+      _selectedClassId = null;
+      _classesFuture = schoolId == null ? null : Api.publicSchoolClasses(schoolId);
+    });
+  }
+
+  Widget _schoolDropdown() {
+    return FutureBuilder<List<dynamic>>(
+      future: _schoolsFuture,
+      builder: (context, snapshot) {
+        final schools = snapshot.data ?? const [];
+
+        return DropdownButtonFormField<int>(
+          initialValue: _selectedSchoolId,
+          decoration: InputDecoration(
+            labelText: _role.id == 'student' ? 'Sekolah siswa' : 'Sekolah',
+            border: const OutlineInputBorder(),
+          ),
+          items: schools
+              .map((item) {
+                final school = item as Map<String, dynamic>;
+                final city = '${school['city'] ?? ''}'.trim();
+                final subtitle = city.isEmpty ? '' : ' - $city';
+
+                return DropdownMenuItem<int>(
+                  value: school['id'] as int,
+                  child: Text('${school['name']}$subtitle'),
+                );
+              })
+              .toList(),
+          onChanged: snapshot.connectionState == ConnectionState.waiting
+              ? null
+              : _selectSchool,
+          validator: (value) => value == null ? 'Pilih sekolah terdaftar' : null,
+        );
+      },
+    );
+  }
+
+  Widget _studentClassDropdown() {
+    if (_selectedSchoolId == null || _classesFuture == null) {
+      return DropdownButtonFormField<int>(
+        decoration: const InputDecoration(
+          labelText: 'Kelas',
+          border: OutlineInputBorder(),
+        ),
+        items: const [],
+        onChanged: null,
+        validator: (_) => 'Pilih sekolah terlebih dahulu',
+      );
+    }
+
+    return FutureBuilder<List<dynamic>>(
+      future: _classesFuture,
+      builder: (context, snapshot) {
+        final classes = snapshot.data ?? const [];
+
+        return DropdownButtonFormField<int>(
+          initialValue: _selectedClassId,
+          decoration: const InputDecoration(
+            labelText: 'Kelas',
+            border: OutlineInputBorder(),
+          ),
+          items: classes
+              .map((item) {
+                final schoolClass = item as Map<String, dynamic>;
+                final grade = '${schoolClass['grade'] ?? ''}'.trim();
+                final subtitle = grade.isEmpty ? '' : ' - tingkat $grade';
+
+                return DropdownMenuItem<int>(
+                  value: schoolClass['id'] as int,
+                  child: Text('${schoolClass['name']}$subtitle'),
+                );
+              })
+              .toList(),
+          onChanged: snapshot.connectionState == ConnectionState.waiting
+              ? null
+              : (value) => setState(() => _selectedClassId = value),
+          validator: (value) => value == null ? 'Pilih kelas' : null,
+        );
+      },
+    );
   }
 
   @override
@@ -171,6 +272,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ? 'Konfirmasi tidak sesuai'
                       : null,
                 ),
+                if (_role.id == 'teacher' || _role.id == 'student') ...[
+                  const SizedBox(height: 16),
+                  _schoolDropdown(),
+                ],
+                if (_role.id == 'student') ...[
+                  const SizedBox(height: 16),
+                  _studentClassDropdown(),
+                ],
                 if (_role.id == 'parent') ...[
                   const SizedBox(height: 16),
                   TextFormField(

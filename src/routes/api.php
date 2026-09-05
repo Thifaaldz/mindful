@@ -7,9 +7,13 @@ use App\Http\Controllers\Api\BurnoutSelfReportController;
 use App\Http\Controllers\Api\ClassroomActivityController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\ParentDashboardController;
+use App\Http\Controllers\Api\PublicSchoolController;
 use App\Http\Controllers\Api\ReminderPreferenceController;
 use App\Http\Controllers\Api\ToolkitController;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/public/schools', [PublicSchoolController::class, 'schools']);
+Route::get('/public/schools/{school}/classes', [PublicSchoolController::class, 'classes']);
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);

@@ -19,7 +19,7 @@ class BadgeResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-trophy';
 
-    protected static ?string $navigationGroup = 'Konten';
+    protected static ?string $navigationGroup = 'Mindfulness';
 
     public static function form(Form $form): Form
     {

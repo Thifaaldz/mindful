@@ -16,7 +16,7 @@ class BurnoutAnalysisSnapshotResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-chart-bar-square';
 
-    protected static ?string $navigationGroup = 'Scoring & Ledger';
+    protected static ?string $navigationGroup = 'Monitoring';
 
     protected static ?string $navigationLabel = 'Snapshot Analisis';
 

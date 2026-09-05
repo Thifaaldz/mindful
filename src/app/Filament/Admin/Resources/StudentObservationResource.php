@@ -16,7 +16,7 @@ class StudentObservationResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-face-smile';
 
-    protected static ?string $navigationGroup = 'Observasi Siswa';
+    protected static ?string $navigationGroup = 'Monitoring';
 
     protected static ?string $recordTitleAttribute = 'student.name';
 

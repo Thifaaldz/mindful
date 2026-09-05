@@ -19,7 +19,7 @@ class ClassroomActivityController extends Controller
     {
         $user = $request->user();
         abort_unless($user->isStudent(), 403);
-        abort_if(blank($user->school), 422, 'Sekolah siswa wajib diisi sebelum mencari kelas.');
+        abort_if(blank($user->school_id) && blank($user->school), 422, 'Sekolah siswa wajib diisi sebelum mencari kelas.');
 
         $date = Carbon::parse($request->query('date', now()->toDateString()));
         $joinedIds = $user->activities()
@@ -27,14 +27,12 @@ class ClassroomActivityController extends Controller
             ->pluck('teacher_activity_id');
 
         $activities = Activity::query()
-            ->with(['owner:id,name,school', 'schoolClass:id,name,grade,school'])
+            ->with(['owner:id,name,school,school_id', 'schoolClass:id,name,grade,school,school_id'])
             ->where('activity_type', Activity::TYPE_CLASSROOM)
             ->whereDate('activity_date', $date)
             ->where('status', '!=', Activity::STATUS_CANCELLED)
             ->whereNotIn('id', $joinedIds)
-            ->whereHas('owner', fn ($query) => $query
-                ->role('teacher')
-                ->whereRaw('LOWER(TRIM(school)) = ?', [strtolower(trim((string) $user->school))]))
+            ->whereHas('owner', fn ($query) => $this->sameSchoolTeacherQuery($query->role('teacher'), $user))
             ->where(fn ($query) => $query
                 ->whereNull('school_class_id')
                 ->orWhere('school_class_id', $user->class_id))
@@ -53,11 +51,11 @@ class ClassroomActivityController extends Controller
         abort_unless($student->isStudent(), 403);
         abort_unless($activity->activity_type === Activity::TYPE_CLASSROOM, 422, 'Activity ini bukan activity kelas.');
         abort_if($activity->status === Activity::STATUS_CANCELLED, 422, 'Activity kelas sudah dibatalkan.');
-        abort_if(blank($student->school), 422, 'Sekolah siswa wajib diisi sebelum join kelas.');
+        abort_if(blank($student->school_id) && blank($student->school), 422, 'Sekolah siswa wajib diisi sebelum join kelas.');
 
         $activity->loadMissing('owner', 'schoolClass');
         abort_if(
-            ! $this->sameSchool($student->school, $activity->owner?->school),
+            ! $this->sameSchool($student, $activity),
             403,
             'Siswa hanya dapat join kelas dari sekolah yang sama.'
         );
@@ -75,6 +73,7 @@ class ClassroomActivityController extends Controller
             [
                 'title' => $activity->title,
                 'category' => $activity->category,
+                'school_id' => $student->school_id ?: $activity->school_id,
                 'activity_type' => Activity::TYPE_CLASSROOM_STUDENT,
                 'activity_kind' => $activity->activity_kind,
                 'school_class_id' => $activity->school_class_id,
@@ -99,7 +98,7 @@ class ClassroomActivityController extends Controller
             ]);
         }
 
-        $studentActivity = $studentActivity->fresh(['teacherActivity.owner:id,name,school', 'schoolClass:id,name,grade,school']);
+        $studentActivity = $studentActivity->fresh(['teacherActivity.owner:id,name,school,school_id', 'schoolClass:id,name,grade,school,school_id']);
 
         return response()->json([
             'activity' => $this->studentActivityPayload($studentActivity),
@@ -115,7 +114,7 @@ class ClassroomActivityController extends Controller
 
         $date = Carbon::parse($activity->activity_date)->toDateString();
         $studentActivities = $activity->studentActivities()
-            ->with(['owner:id,name,email,school,class_id,student_verification_code', 'owner.schoolClass:id,name,grade,school'])
+            ->with(['owner:id,name,email,school,school_id,class_id,student_verification_code', 'owner.schoolClass:id,name,grade,school,school_id'])
             ->orderBy('checkin_at')
             ->get();
 
@@ -132,10 +131,12 @@ class ClassroomActivityController extends Controller
                         'id' => $student?->id,
                         'name' => $student?->name,
                         'email' => $student?->email,
+                        'school_id' => $student?->school_id,
                         'school' => $student?->school,
                         'class' => $student?->schoolClass ? [
                             'id' => $student->schoolClass->id,
                             'name' => $student->schoolClass->name,
+                            'school_id' => $student->schoolClass->school_id,
                         ] : null,
                     ],
                     'activity' => $studentActivity,
@@ -170,6 +171,7 @@ class ClassroomActivityController extends Controller
             'category' => $activity->category,
             'activity_type' => $activity->activity_type,
             'activity_kind' => $activity->activity_kind,
+            'school_id' => $activity->school_id,
             'activity_date' => $activity->activity_date?->toDateString(),
             'start_at' => $activity->start_at?->toIso8601String(),
             'end_at' => $activity->end_at?->toIso8601String(),
@@ -179,11 +181,13 @@ class ClassroomActivityController extends Controller
             'teacher' => [
                 'id' => $activity->owner?->id,
                 'name' => $activity->owner?->name,
+                'school_id' => $activity->owner?->school_id,
                 'school' => $activity->owner?->school,
             ],
             'class' => $activity->schoolClass ? [
                 'id' => $activity->schoolClass->id,
                 'name' => $activity->schoolClass->name,
+                'school_id' => $activity->schoolClass->school_id,
                 'school' => $activity->schoolClass->school,
             ] : null,
         ];
@@ -209,10 +213,27 @@ class ClassroomActivityController extends Controller
         ];
     }
 
-    private function sameSchool(?string $left, ?string $right): bool
+    private function sameSchoolTeacherQuery($query, User $student)
     {
-        return filled($left)
-            && filled($right)
-            && strtolower(trim($left)) === strtolower(trim($right));
+        return $query->where(function ($query) use ($student) {
+            if ($student->school_id) {
+                $query->where('school_id', $student->school_id);
+            }
+
+            if (filled($student->school)) {
+                $query->orWhereRaw('LOWER(TRIM(school)) = ?', [strtolower(trim((string) $student->school))]);
+            }
+        });
+    }
+
+    private function sameSchool(User $student, Activity $activity): bool
+    {
+        if ($student->school_id && ($activity->school_id || $activity->owner?->school_id)) {
+            return (int) $student->school_id === (int) ($activity->school_id ?: $activity->owner?->school_id);
+        }
+
+        return filled($student->school)
+            && filled($activity->owner?->school)
+            && strtolower(trim($student->school)) === strtolower(trim((string) $activity->owner?->school));
     }
 }

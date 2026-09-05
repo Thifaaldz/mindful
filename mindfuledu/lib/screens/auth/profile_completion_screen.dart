@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/account_role.dart';
+import '../../core/api.dart';
 import '../../core/api_client.dart';
 import '../../core/session.dart';
 
@@ -19,10 +20,20 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
   final _schoolController = TextEditingController();
   final _classController = TextEditingController();
   final _studentCodeController = TextEditingController();
+  late Future<List<dynamic>> _schoolsFuture;
+  Future<List<dynamic>>? _classesFuture;
+  int? _selectedSchoolId;
+  int? _selectedClassId;
   String _role = 'teacher';
   bool _initialized = false;
   bool _loading = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _schoolsFuture = Api.publicSchools();
+  }
 
   @override
   void didChangeDependencies() {
@@ -30,6 +41,11 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
     final user = context.read<Session>().user;
     if (!_initialized) {
       _role = (user?['role'] as String?) ?? _role;
+      _selectedSchoolId = user?['school_id'] as int?;
+      _selectedClassId = (user?['class'] as Map?)?['id'] as int?;
+      if (_selectedSchoolId != null) {
+        _classesFuture = Api.publicSchoolClasses(_selectedSchoolId!);
+      }
       _initialized = true;
     }
     _nameController.text = _nameController.text.isEmpty
@@ -56,8 +72,14 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
       await context.read<Session>().completeProfile(
         name: _nameController.text.trim(),
         role: _role,
-        school: _schoolController.text.trim(),
-        className: _role == 'student' ? _classController.text.trim() : null,
+        schoolId: _role == 'teacher' || _role == 'student'
+            ? _selectedSchoolId
+            : null,
+        school: _role == 'parent' ? _schoolController.text.trim() : null,
+        classId: _role == 'student' ? _selectedClassId : null,
+        className: _role == 'student' && _selectedClassId == null
+            ? _classController.text.trim()
+            : null,
         studentVerificationCode: _role == 'parent'
             ? _studentCodeController.text.trim()
             : null,
@@ -76,6 +98,98 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
     _classController.dispose();
     _studentCodeController.dispose();
     super.dispose();
+  }
+
+  void _selectSchool(int? schoolId) {
+    setState(() {
+      _selectedSchoolId = schoolId;
+      _selectedClassId = null;
+      _classesFuture = schoolId == null ? null : Api.publicSchoolClasses(schoolId);
+    });
+  }
+
+  Widget _schoolDropdown() {
+    return FutureBuilder<List<dynamic>>(
+      future: _schoolsFuture,
+      builder: (context, snapshot) {
+        final schools = snapshot.data ?? const [];
+        final hasSelected = schools.any(
+          (item) => (item as Map<String, dynamic>)['id'] == _selectedSchoolId,
+        );
+
+        return DropdownButtonFormField<int>(
+          initialValue: hasSelected ? _selectedSchoolId : null,
+          decoration: const InputDecoration(
+            labelText: 'Sekolah',
+            border: OutlineInputBorder(),
+          ),
+          items: schools
+              .map((item) {
+                final school = item as Map<String, dynamic>;
+                final city = '${school['city'] ?? ''}'.trim();
+                final subtitle = city.isEmpty ? '' : ' - $city';
+
+                return DropdownMenuItem<int>(
+                  value: school['id'] as int,
+                  child: Text('${school['name']}$subtitle'),
+                );
+              })
+              .toList(),
+          onChanged: snapshot.connectionState == ConnectionState.waiting
+              ? null
+              : _selectSchool,
+          validator: (value) => value == null ? 'Pilih sekolah terdaftar' : null,
+        );
+      },
+    );
+  }
+
+  Widget _studentClassDropdown() {
+    if (_selectedSchoolId == null || _classesFuture == null) {
+      return DropdownButtonFormField<int>(
+        decoration: const InputDecoration(
+          labelText: 'Kelas',
+          border: OutlineInputBorder(),
+        ),
+        items: const [],
+        onChanged: null,
+        validator: (_) => 'Pilih sekolah terlebih dahulu',
+      );
+    }
+
+    return FutureBuilder<List<dynamic>>(
+      future: _classesFuture,
+      builder: (context, snapshot) {
+        final classes = snapshot.data ?? const [];
+        final hasSelected = classes.any(
+          (item) => (item as Map<String, dynamic>)['id'] == _selectedClassId,
+        );
+
+        return DropdownButtonFormField<int>(
+          initialValue: hasSelected ? _selectedClassId : null,
+          decoration: const InputDecoration(
+            labelText: 'Kelas',
+            border: OutlineInputBorder(),
+          ),
+          items: classes
+              .map((item) {
+                final schoolClass = item as Map<String, dynamic>;
+                final grade = '${schoolClass['grade'] ?? ''}'.trim();
+                final subtitle = grade.isEmpty ? '' : ' - tingkat $grade';
+
+                return DropdownMenuItem<int>(
+                  value: schoolClass['id'] as int,
+                  child: Text('${schoolClass['name']}$subtitle'),
+                );
+              })
+              .toList(),
+          onChanged: snapshot.connectionState == ConnectionState.waiting
+              ? null
+              : (value) => setState(() => _selectedClassId = value),
+          validator: (value) => value == null ? 'Pilih kelas' : null,
+        );
+      },
+    );
   }
 
   @override
@@ -119,30 +233,23 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
                       : null,
                 ),
                 const SizedBox(height: 16),
-                TextFormField(
-                  controller: _schoolController,
-                  decoration: const InputDecoration(
-                    labelText: 'Sekolah',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) => (value == null || value.trim().isEmpty)
-                      ? 'Sekolah wajib diisi'
-                      : null,
-                ),
-                if (_role == 'student') ...[
-                  const SizedBox(height: 16),
+                if (_role == 'teacher' || _role == 'student')
+                  _schoolDropdown()
+                else
                   TextFormField(
-                    controller: _classController,
+                    controller: _schoolController,
                     decoration: const InputDecoration(
-                      labelText: 'Kelas',
+                      labelText: 'Sekolah',
                       border: OutlineInputBorder(),
                     ),
-                    textCapitalization: TextCapitalization.characters,
                     validator: (value) =>
                         (value == null || value.trim().isEmpty)
-                        ? 'Kelas wajib diisi'
+                        ? 'Sekolah wajib diisi'
                         : null,
                   ),
+                if (_role == 'student') ...[
+                  const SizedBox(height: 16),
+                  _studentClassDropdown(),
                 ],
                 if (_role == 'parent') ...[
                   const SizedBox(height: 16),

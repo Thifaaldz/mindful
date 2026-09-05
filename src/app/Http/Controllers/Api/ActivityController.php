@@ -89,6 +89,7 @@ class ActivityController extends Controller
             }
 
             $activity = $request->user()->activities()->create([
+                'school_id' => $request->user()->school_id,
                 'title' => $data['title'],
                 'category' => $data['category'] ?? null,
                 'activity_type' => $this->activityTypeFor($request, $data),
@@ -156,6 +157,7 @@ class ActivityController extends Controller
         $overlap = $this->hasOverlap($request, $startAt, $endAt, $activity->id);
 
         $activity->update([
+            'school_id' => $request->user()->school_id,
             'title' => $data['title'],
             'category' => $data['category'] ?? null,
             'activity_type' => $this->activityTypeFor($request, $data),
@@ -316,6 +318,7 @@ class ActivityController extends Controller
         $copy = $request->user()->activities()->create([
             'title' => $activity->title,
             'category' => $activity->category,
+            'school_id' => $activity->school_id,
             'activity_type' => $activity->activity_type,
             'activity_kind' => $activity->activity_kind,
             'school_class_id' => $activity->school_class_id,
@@ -472,25 +475,41 @@ class ActivityController extends Controller
         }
 
         abort_unless($user->isTeacher(), 403, 'Hanya guru yang dapat membuat activity kelas.');
-        abort_if(blank($user->school), 422, 'Sekolah guru wajib diisi sebelum membuat activity kelas.');
+        abort_if(blank($user->school_id) && blank($user->school), 422, 'Sekolah guru wajib diisi sebelum membuat activity kelas.');
 
         if ($classId) {
             $schoolClass = SchoolClass::findOrFail($classId);
             abort_if(
-                filled($schoolClass->school) && strcasecmp($schoolClass->school, $user->school) !== 0,
+                $user->school_id && $schoolClass->school_id && (int) $schoolClass->school_id !== (int) $user->school_id,
+                422,
+                'Kelas harus berada di sekolah yang sama dengan guru.'
+            );
+            abort_if(
+                ! $user->school_id && filled($schoolClass->school) && strcasecmp($schoolClass->school, $user->school) !== 0,
                 422,
                 'Kelas harus berada di sekolah yang sama dengan guru.'
             );
         } elseif ($className !== '') {
-            $schoolClass = SchoolClass::firstOrCreate(
-                ['name' => strtoupper($className), 'school' => $user->school],
-                ['grade' => $this->gradeFromClassName($className)]
-            );
+            $schoolClass = $user->school_id
+                ? SchoolClass::firstOrCreate(
+                    ['name' => strtoupper($className), 'school_id' => $user->school_id],
+                    [
+                        'school' => $user->school,
+                        'grade' => $this->gradeFromClassName($className),
+                    ]
+                )
+                : SchoolClass::firstOrCreate(
+                    ['name' => strtoupper($className), 'school' => $user->school],
+                    ['grade' => $this->gradeFromClassName($className)]
+                );
         } else {
             return null;
         }
 
-        $schoolClass->forceFill(['school' => $schoolClass->school ?: $user->school])->save();
+        $schoolClass->forceFill([
+            'school_id' => $schoolClass->school_id ?: $user->school_id,
+            'school' => $schoolClass->school ?: $user->school,
+        ])->save();
         $user->teachingClasses()->syncWithoutDetaching([$schoolClass->id]);
 
         return $schoolClass;

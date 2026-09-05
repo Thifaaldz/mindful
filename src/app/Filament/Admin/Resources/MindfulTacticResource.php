@@ -19,7 +19,9 @@ class MindfulTacticResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-light-bulb';
 
-    protected static ?string $navigationGroup = 'Konten';
+    protected static ?string $navigationGroup = 'Mindfulness';
+
+    protected static ?string $navigationLabel = 'Mindfulness Techniques';
 
     public static function form(Form $form): Form
     {

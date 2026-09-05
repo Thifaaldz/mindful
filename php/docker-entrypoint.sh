@@ -72,14 +72,15 @@ REDIS_HOST=127.0.0.1
 REDIS_PASSWORD=null
 REDIS_PORT=6379
 
-MAIL_MAILER=log
+MAIL_MAILER=resend
 MAIL_SCHEME=null
 MAIL_HOST=127.0.0.1
 MAIL_PORT=2525
 MAIL_USERNAME=null
 MAIL_PASSWORD=null
-MAIL_FROM_ADDRESS="hello@example.com"
-MAIL_FROM_NAME="${APP_NAME}"
+MAIL_FROM_ADDRESS="noreply@mindfuledu.test"
+MAIL_FROM_NAME="MindfulEdu"
+RESEND_KEY=
 
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
@@ -88,6 +89,11 @@ AWS_BUCKET=
 AWS_USE_PATH_STYLE_ENDPOINT=false
 
 VITE_APP_NAME="${APP_NAME}"
+MINDFULEDU_ML_URL=http://ml:8000
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_TIMEOUT_SECONDS=20
+GOOGLE_CLIENT_ID=
 EOF
 else
   echo "📄 .env file already exists. Keeping current environment variables."
@@ -117,7 +123,7 @@ done
 echo "✅ Database is ready!"
 
 # Step 4: Install dependencies if not already installed
-if [ ! -d /var/www/html/vendor ]; then
+if [ ! -d /var/www/html/vendor ] || [ /var/www/html/composer.lock -nt /var/www/html/vendor/autoload.php ]; then
   echo "📦 Installing composer dependencies..."
   composer install --no-interaction --prefer-dist --optimize-autoloader
 fi

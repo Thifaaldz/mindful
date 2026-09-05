@@ -97,7 +97,9 @@ class Session extends ChangeNotifier {
     required String passwordConfirmation,
     String? name,
     String? role,
+    int? schoolId,
     String? school,
+    int? classId,
     String? className,
     String? studentVerificationCode,
     bool rememberDevice = false,
@@ -111,14 +113,23 @@ class Session extends ChangeNotifier {
         'password': password,
         'password_confirmation': passwordConfirmation,
         'role': role,
+        'school_id': schoolId,
         'school': school,
+        'class_id': classId,
         'class_name': className,
         'student_verification_code': studentVerificationCode,
         ...device,
       },
     );
+    final data = response.data as Map<String, dynamic>;
+    if (!data.containsKey('token')) {
+      throw ApiException(
+        data['message'] as String? ??
+            'Pendaftaran berhasil dan menunggu approval Admin Sekolah.',
+      );
+    }
     await _persist(
-      response.data as Map<String, dynamic>,
+      data,
       rememberDevice: rememberDevice,
     );
   }
@@ -142,7 +153,9 @@ class Session extends ChangeNotifier {
   Future<void> completeProfile({
     required String name,
     required String role,
+    int? schoolId,
     String? school,
+    int? classId,
     String? className,
     String? studentVerificationCode,
   }) async {
@@ -151,7 +164,9 @@ class Session extends ChangeNotifier {
       data: {
         'name': name,
         'role': role,
+        'school_id': schoolId,
         'school': school,
+        'class_id': classId,
         'class_name': className,
         'student_verification_code': studentVerificationCode,
       },

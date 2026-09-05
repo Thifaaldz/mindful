@@ -1628,12 +1628,15 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
   late final TextEditingController _titleController;
   late final TextEditingController _customKindController;
   late final TextEditingController _schoolClassController;
+  final List<Map<String, dynamic>> _teacherClasses = [];
   late DateTime _date;
   late DateTime _repeatUntil;
   TimeOfDay? _start;
   TimeOfDay? _end;
+  int? _schoolClassId;
   String _activityKind = '';
   String _repeatType = 'none';
+  bool _loadingTeacherClasses = false;
   bool _saving = false;
 
   bool get _editing => widget.activity != null;
@@ -1654,12 +1657,14 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
     _schoolClassController = TextEditingController(
       text: '${(activity?['class'] as Map?)?['name'] ?? ''}',
     );
+    _schoolClassId = (activity?['class'] as Map?)?['id'] as int?;
     _date = activity == null
         ? widget.selectedDate
         : DateTime.parse('${activity['activity_date']}');
     _repeatUntil = _defaultRepeatUntil(_date, _repeatType);
     _start = _parseOptionalTime(activity?['start_at']);
     _end = _parseOptionalTime(activity?['end_at']);
+    Future.microtask(_loadTeacherClasses);
   }
 
   @override
@@ -1699,7 +1704,10 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
           category: null,
           activityKind: _selectedActivityKindLabel(),
           activityType: _selectedActivityType(),
-          schoolClassName: _classroomClassName(),
+          schoolClassId: _selectedActivityType() == 'classroom'
+              ? _schoolClassId
+              : null,
+          schoolClassName: _schoolClassId == null ? _classroomClassName() : null,
         );
         if (mounted) {
           Navigator.of(context).pop(
@@ -1722,7 +1730,10 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
           category: null,
           activityKind: _selectedActivityKindLabel(),
           activityType: _selectedActivityType(),
-          schoolClassName: _classroomClassName(),
+          schoolClassId: _selectedActivityType() == 'classroom'
+              ? _schoolClassId
+              : null,
+          schoolClassName: _schoolClassId == null ? _classroomClassName() : null,
           repeatType: _repeatType,
           repeatUntil: _repeating
               ? DateFormat('yyyy-MM-dd').format(_repeatUntil)
@@ -1824,7 +1835,39 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
   String? _classroomClassName() {
     if (_selectedActivityType() != 'classroom') return null;
 
-    return _emptyToNull(_schoolClassController.text);
+    if (_schoolClassId != null) {
+      final selected = _teacherClasses
+          .where((item) => item['id'] == _schoolClassId)
+          .map((item) => '${item['name'] ?? ''}'.trim())
+          .firstOrNull;
+
+      return _emptyToNull(selected ?? '');
+    }
+
+    return _teacherClasses.isEmpty ? _emptyToNull(_schoolClassController.text) : null;
+  }
+
+  Future<void> _loadTeacherClasses() async {
+    final session = context.read<Session>();
+    if (!session.isTeacher) return;
+
+    final schoolId = session.user?['school_id'] as int?;
+    if (schoolId == null) return;
+
+    if (mounted) setState(() => _loadingTeacherClasses = true);
+    try {
+      final classes = await Api.publicSchoolClasses(schoolId);
+      if (!mounted) return;
+      setState(() {
+        _teacherClasses
+          ..clear()
+          ..addAll(classes.map((item) => Map<String, dynamic>.from(item as Map)));
+      });
+    } catch (_) {
+      // Legacy activities can still use their existing class text if class fetch fails.
+    } finally {
+      if (mounted) setState(() => _loadingTeacherClasses = false);
+    }
   }
 
   Future<void> _pickTime(bool start) async {
@@ -1900,6 +1943,12 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
     final isTeacher = session.isTeacher;
     final kindOptions = _activityKindOptions(session.role);
     final role = AccountRole.byId(session.role);
+    final selectedClassInOptions = _teacherClasses.any(
+      (item) => item['id'] == _schoolClassId,
+    );
+    final hasSelectedClass = _schoolClassId == null ||
+        selectedClassInOptions ||
+        _schoolClassController.text.trim().isNotEmpty;
     if (_activityKind.isEmpty && kindOptions.isNotEmpty) {
       _activityKind = kindOptions.first.value;
     }
@@ -2036,18 +2085,45 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
             ],
             if (isTeacher && _activityKind == 'teaching') ...[
               const SizedBox(height: 12),
-              TextField(
-                controller: _schoolClassController,
+              DropdownButtonFormField<int?>(
+                initialValue: hasSelectedClass ? _schoolClassId : null,
                 decoration: const InputDecoration(
                   labelText: 'Target kelas',
-                  hintText: 'Kosongkan untuk seluruh siswa sekolah',
+                  hintText: 'Pilih kelas tujuan',
                 ),
-                onChanged: (_) => setState(() {}),
-                textCapitalization: TextCapitalization.characters,
+                items: [
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('Semua Kelas'),
+                  ),
+                  if (_schoolClassId != null && !selectedClassInOptions)
+                    DropdownMenuItem<int?>(
+                      value: _schoolClassId,
+                      child: Text(
+                        _schoolClassController.text.trim().isEmpty
+                            ? 'Kelas saat ini'
+                            : _schoolClassController.text.trim(),
+                      ),
+                    ),
+                  ..._teacherClasses.map(
+                    (item) => DropdownMenuItem<int?>(
+                      value: item['id'] as int?,
+                      child: Text('${item['name'] ?? '-'}'),
+                    ),
+                  ),
+                ],
+                onChanged: _loadingTeacherClasses
+                    ? null
+                    : (value) {
+                        setState(() {
+                          _schoolClassId = value;
+                          _schoolClassController.text = _classroomClassName() ?? '';
+                        });
+                      },
               ),
               const SizedBox(height: 8),
               Text(
-                _schoolClassController.text.trim().isEmpty
+                _schoolClassId == null
                     ? 'Kelas terbuka untuk semua siswa di sekolah Anda.'
                     : 'Hanya siswa di kelas ini yang bisa join.',
                 style: Theme.of(

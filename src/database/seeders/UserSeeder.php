@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\School;
 use App\Models\SchoolClass;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
@@ -27,11 +28,80 @@ class UserSeeder extends Seeder
         );
         $user->assignRole('user');
 
-        $classes = [
-            '5A' => SchoolClass::firstOrCreate(['name' => '5A', 'school' => 'SDN Contoh 1'], ['grade' => '5']),
-            '5B' => SchoolClass::firstOrCreate(['name' => '5B', 'school' => 'SDN Contoh 1'], ['grade' => '5']),
-            '6A' => SchoolClass::firstOrCreate(['name' => '6A', 'school' => 'SDN Contoh 2'], ['grade' => '6']),
+        $schools = [
+            'SDN Contoh 1' => School::firstOrCreate(
+                ['npsn' => 'DEMO-SDN-CONTOH-1'],
+                [
+                    'name' => 'SDN Contoh 1',
+                    'slug' => School::makeUniqueSlug('SDN Contoh 1'),
+                    'education_level' => 'sd',
+                    'school_status' => 'public',
+                    'address' => 'Jl. Pendidikan No. 1',
+                    'province' => 'DKI Jakarta',
+                    'city' => 'Jakarta',
+                    'district' => 'Kebayoran',
+                    'contact_name' => 'Kepala SDN Contoh 1',
+                    'contact_position' => 'Kepala Sekolah',
+                    'contact_email' => 'kontak.sdncontoh1@mindfuledu.test',
+                    'contact_phone' => '080000000001',
+                    'status' => School::STATUS_APPROVED,
+                    'verified_at' => now(),
+                    'verified_by' => $user->id,
+                ]
+            ),
+            'SDN Contoh 2' => School::firstOrCreate(
+                ['npsn' => 'DEMO-SDN-CONTOH-2'],
+                [
+                    'name' => 'SDN Contoh 2',
+                    'slug' => School::makeUniqueSlug('SDN Contoh 2'),
+                    'education_level' => 'sd',
+                    'school_status' => 'public',
+                    'address' => 'Jl. Pendidikan No. 2',
+                    'province' => 'DKI Jakarta',
+                    'city' => 'Jakarta',
+                    'district' => 'Cilandak',
+                    'contact_name' => 'Kepala SDN Contoh 2',
+                    'contact_position' => 'Kepala Sekolah',
+                    'contact_email' => 'kontak.sdncontoh2@mindfuledu.test',
+                    'contact_phone' => '080000000002',
+                    'status' => School::STATUS_APPROVED,
+                    'verified_at' => now(),
+                    'verified_by' => $user->id,
+                ]
+            ),
         ];
+
+        $classes = [
+            '5A' => SchoolClass::firstOrCreate(
+                ['name' => '5A', 'school_id' => $schools['SDN Contoh 1']->id],
+                ['school' => 'SDN Contoh 1', 'grade' => '5', 'is_active' => true]
+            ),
+            '5B' => SchoolClass::firstOrCreate(
+                ['name' => '5B', 'school_id' => $schools['SDN Contoh 1']->id],
+                ['school' => 'SDN Contoh 1', 'grade' => '5', 'is_active' => true]
+            ),
+            '6A' => SchoolClass::firstOrCreate(
+                ['name' => '6A', 'school_id' => $schools['SDN Contoh 2']->id],
+                ['school' => 'SDN Contoh 2', 'grade' => '6', 'is_active' => true]
+            ),
+        ];
+
+        foreach ($schools as $school) {
+            $schoolAdmin = User::updateOrCreate(
+                ['email' => 'admin@'.$school->slug.'.test'],
+                [
+                    'name' => 'Admin '.$school->name,
+                    'password' => Hash::make('password'),
+                    'school_id' => $school->id,
+                    'school' => $school->name,
+                    'approval_status' => 'approved',
+                    'approved_at' => now(),
+                    'must_change_password' => false,
+                    'profile_completed' => true,
+                ]
+            );
+            $schoolAdmin->assignRole('school_admin');
+        }
 
         $teachers = [
             [
@@ -60,7 +130,11 @@ class UserSeeder extends Seeder
                 [
                     'name' => $teacherData['name'],
                     'password' => Hash::make('password'),
+                    'school_id' => $schools[$teacherData['school']]->id,
                     'school' => $teacherData['school'],
+                    'approval_status' => 'approved',
+                    'approved_at' => now(),
+                    'profile_completed' => true,
                 ]
             );
             $teacher->assignRole('teacher');
@@ -85,9 +159,13 @@ class UserSeeder extends Seeder
                 [
                     'name' => $studentData['name'],
                     'password' => Hash::make('password'),
+                    'school_id' => $schools[$studentData['school']]->id,
                     'school' => $studentData['school'],
                     'class_id' => $classes[$studentData['class']]->id,
                     'student_verification_code' => 'STU-'.strtoupper($studentData['class']).strtoupper(substr(md5($studentData['email']), 0, 4)),
+                    'approval_status' => 'approved',
+                    'approved_at' => now(),
+                    'profile_completed' => true,
                 ]
             );
             $student->assignRole('student');
@@ -98,7 +176,10 @@ class UserSeeder extends Seeder
             [
                 'name' => 'Orang Tua Ani',
                 'password' => Hash::make('password'),
+                'school_id' => $schools['SDN Contoh 1']->id,
                 'school' => 'SDN Contoh 1',
+                'approval_status' => 'approved',
+                'profile_completed' => true,
             ]
         );
         $parent->assignRole('parent');

@@ -21,6 +21,7 @@ class Activity extends Model
 
     protected $fillable = [
         'user_id',
+        'school_id',
         'title',
         'category',
         'activity_type',
@@ -81,6 +82,11 @@ class Activity extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function schoolModel(): BelongsTo
+    {
+        return $this->belongsTo(School::class, 'school_id');
     }
 
     public function schoolClass(): BelongsTo

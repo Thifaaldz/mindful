@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\School;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -13,30 +14,58 @@ beforeEach(function () {
     Role::create(['name' => 'parent']);
 });
 
-test('email registration starts from selected access role then completes profile later', function () {
-    $response = $this->postJson('/api/register', [
+test('email registration uses approved school and waits for school admin approval', function () {
+    $school = School::create([
+        'name' => 'SDN Mindful',
+        'slug' => 'sdn-mindful',
+        'npsn' => 'TEST-001',
+        'education_level' => 'sd',
+        'school_status' => 'public',
+        'address' => 'Jl. Mindful',
+        'province' => 'DKI Jakarta',
+        'city' => 'Jakarta',
+        'contact_name' => 'Admin Sekolah',
+        'contact_email' => 'admin.sekolah@mindfuledu.test',
+        'status' => School::STATUS_APPROVED,
+        'verified_at' => now(),
+    ]);
+
+    $this->postJson('/api/register', [
+        'name' => 'Guru Baru',
         'email' => 'baru@mindfuledu.test',
         'password' => 'password123',
         'password_confirmation' => 'password123',
         'role' => 'teacher',
+        'school_id' => $school->id,
     ])
-        ->assertCreated()
+        ->assertStatus(202)
         ->assertJsonPath('user.email', 'baru@mindfuledu.test')
         ->assertJsonPath('user.role', 'teacher')
-        ->assertJsonPath('user.profile_completed', false);
+        ->assertJsonPath('user.school_id', $school->id)
+        ->assertJsonPath('user.approval_status', 'pending')
+        ->assertJsonMissingPath('token');
 
-    $this->withToken($response->json('token'))
-        ->putJson('/api/me/profile', [
-            'name' => 'Guru Baru',
-            'role' => 'teacher',
-            'school' => 'SDN Mindful',
-        ])
+    $this->postJson('/api/login', [
+        'email' => 'baru@mindfuledu.test',
+        'password' => 'password123',
+        'role' => 'teacher',
+    ])->assertForbidden();
+
+    $user = User::where('email', 'baru@mindfuledu.test')->first();
+    $user->forceFill([
+        'approval_status' => 'approved',
+        'approved_at' => now(),
+    ])->save();
+
+    $this->postJson('/api/login', [
+        'email' => 'baru@mindfuledu.test',
+        'password' => 'password123',
+        'role' => 'teacher',
+    ])
         ->assertOk()
-        ->assertJsonPath('user.name', 'Guru Baru')
-        ->assertJsonPath('user.role', 'teacher')
-        ->assertJsonPath('user.profile_completed', true);
+        ->assertJsonStructure(['token']);
 
-    expect(User::where('email', 'baru@mindfuledu.test')->first()->hasRole('teacher'))->toBeTrue();
+    expect($user->hasRole('teacher'))->toBeTrue();
 });
 
 test('google login creates account from verified id token', function () {

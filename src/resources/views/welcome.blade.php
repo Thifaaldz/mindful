@@ -742,6 +742,7 @@
                 <a href="#pembaruan">Pembaruan</a>
                 <a href="#tujuan">Tujuan</a>
                 <a href="#aplikasi">Aplikasi</a>
+                <a href="/register-school">Daftar Sekolah</a>
                 <a class="button primary" href="/download/android">Download</a>
             </div>
         </nav>
@@ -766,6 +767,7 @@
                     </p>
                     <div class="hero-actions">
                         <a class="button primary" href="/download/android">Download APK Android</a>
+                        <a class="button" href="/register-school">Daftarkan Sekolah</a>
                         <a class="button" href="#fitur">Lihat Informasi</a>
                         <span class="download-meta">Ukuran file: {{ $apkSize }}</span>
                     </div>
@@ -965,6 +967,7 @@
                             pastikan perangkat berada di jaringan yang bisa mengakses backend MindfulEdu.
                         </p>
                         <a class="button" href="/download/android">Download APK Android</a>
+                        <a class="button" href="/register-school">Daftarkan Sekolah</a>
                     </div>
                     <img class="avatar-art" src="/landing/avatar_home.png" alt="Avatar mindfulness MindfulEdu">
                 </div>

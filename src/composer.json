@@ -20,6 +20,7 @@
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
         "njxqlus/filament-progressbar": "*",
+        "resend/resend-php": "^0.10.0",
         "z3d0x/filament-logger": "^0.8.0"
     },
     "require-dev": {

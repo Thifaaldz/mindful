@@ -9,6 +9,21 @@ class Api {
     return res.data as Map<String, dynamic>;
   }
 
+  static Future<List<dynamic>> publicSchools({String? search}) async {
+    final res = await _api.get(
+      '/public/schools',
+      query: {
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      },
+    );
+    return (res.data as Map<String, dynamic>)['schools'] as List<dynamic>;
+  }
+
+  static Future<List<dynamic>> publicSchoolClasses(int schoolId) async {
+    final res = await _api.get('/public/schools/$schoolId/classes');
+    return (res.data as Map<String, dynamic>)['classes'] as List<dynamic>;
+  }
+
   static Future<Map<String, dynamic>> activities({required String date}) async {
     final res = await _api.get('/activities', query: {'date': date});
     return res.data as Map<String, dynamic>;
