@@ -1860,7 +1860,7 @@ IconData _sourceIcon(String source) {
 }
 
 bool _isAiSource(String source) {
-  return source == 'gemini';
+  return const {'gemini', 'fastapi', 'mock'}.contains(source);
 }
 
 String _shortActivityTitle(dynamic title) {

@@ -1209,8 +1209,8 @@ class _ActivityAnalysisDialogContent extends StatelessWidget {
               ),
             if (source.isNotEmpty)
               StatusPill(
-                label: source == 'gemini' ? 'Berbasis AI' : 'Lokal',
-                color: source == 'gemini'
+                label: _activitySourceLabel(source),
+                color: _isActivityAiSource(source)
                     ? const Color(0xFF24718E)
                     : AppTheme.muted,
               ),
@@ -1306,6 +1306,14 @@ String _categoryFromActivity(Map<String, dynamic> activity) {
   }
 
   return 'hijau';
+}
+
+bool _isActivityAiSource(String source) {
+  return const {'gemini', 'fastapi', 'mock'}.contains(source);
+}
+
+String _activitySourceLabel(String source) {
+  return _isActivityAiSource(source) ? 'Berbasis AI' : 'Lokal';
 }
 
 String _conditionLabel(String category) {
@@ -1532,11 +1540,25 @@ class _ClassroomObservationSheet extends StatelessWidget {
                       final checkin = _jsonMap(row['checkin']);
                       final checkout = _jsonMap(row['checkout']);
                       final analysis = _jsonMap(row['burnout_analysis']);
+                      final activity = _jsonMap(row['activity']);
                       final recommendation = _jsonMap(
-                        analysis['recommendation'] ??
+                        checkout['recommended_tactic'] ??
+                            analysis['recommendation'] ??
                             analysis['recommendation_summary'],
                       );
-                      final category = '${analysis['category'] ?? 'belum'}';
+                      final category =
+                          '${row['activity_condition'] ?? analysis['category'] ?? 'belum'}';
+                      final source = '${checkout['analysis_source'] ?? ''}'
+                          .trim();
+                      final tacticTitle =
+                          '${recommendation['title'] ?? recommendation['practice'] ?? ''}'
+                              .trim();
+                      final tacticReason =
+                          '${recommendation['why_this_tactic'] ?? recommendation['reason'] ?? ''}'
+                              .trim();
+                      final tacticMovement =
+                          '${recommendation['recommended_movement'] ?? ''}'
+                              .trim();
 
                       return Card(
                         child: Padding(
@@ -1560,6 +1582,12 @@ class _ClassroomObservationSheet extends StatelessWidget {
                                   ),
                                 ],
                               ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${activity['title'] ?? 'Activity kelas'}',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: AppTheme.muted),
+                              ),
                               const SizedBox(height: 8),
                               Wrap(
                                 spacing: 8,
@@ -1578,20 +1606,55 @@ class _ClassroomObservationSheet extends StatelessWidget {
                                       label: 'AI: ${checkout['mood_detected']}',
                                       color: const Color(0xFF24718E),
                                     ),
+                                  if (source.isNotEmpty)
+                                    StatusPill(
+                                      label: _isActivityAiSource(source)
+                                          ? 'Review AI'
+                                          : 'Review lokal',
+                                      color: _isActivityAiSource(source)
+                                          ? const Color(0xFF24718E)
+                                          : AppTheme.muted,
+                                    ),
                                 ],
                               ),
-                              if ('${recommendation['headline'] ?? ''}'
-                                  .isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              _ObservationDetailLine(
+                                label: 'Kenapa check-in',
+                                value: '${checkin['trigger'] ?? ''}',
+                              ),
+                              _ObservationDetailLine(
+                                label: 'Yang terjadi',
+                                value: '${checkout['fact'] ?? ''}',
+                              ),
+                              _ObservationDetailLine(
+                                label: 'Perasaan siswa',
+                                value: '${checkout['feeling'] ?? ''}',
+                              ),
+                              _ObservationDetailLine(
+                                label: 'Pola yang terlihat',
+                                value: '${checkout['pattern'] ?? ''}',
+                              ),
+                              _ObservationDetailLine(
+                                label: 'Rencana siswa',
+                                value: '${checkout['plan'] ?? ''}',
+                              ),
+                              _ObservationDetailLine(
+                                label: 'Review AI',
+                                value: '${checkout['suggestion'] ?? ''}',
+                              ),
+                              if (tacticTitle.isNotEmpty) ...[
                                 const SizedBox(height: 10),
                                 Text(
-                                  '${recommendation['headline']}',
+                                  tacticTitle,
                                   style: Theme.of(context).textTheme.titleSmall,
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${recommendation['action'] ?? ''}',
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(color: AppTheme.muted),
+                                _ObservationDetailLine(
+                                  label: 'Alasan teknik',
+                                  value: tacticReason,
+                                ),
+                                _ObservationDetailLine(
+                                  label: 'Gerakan disarankan',
+                                  value: tacticMovement,
                                 ),
                               ],
                             ],
@@ -1604,6 +1667,38 @@ class _ClassroomObservationSheet extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _ObservationDetailLine extends StatelessWidget {
+  const _ObservationDetailLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final cleaned = value.trim();
+    if (cleaned.isEmpty || cleaned == 'null') {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.labelMedium),
+          const SizedBox(height: 2),
+          Text(
+            cleaned,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppTheme.muted),
+          ),
+        ],
       ),
     );
   }
