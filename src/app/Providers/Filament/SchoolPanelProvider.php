@@ -29,6 +29,8 @@ class SchoolPanelProvider extends PanelProvider
             ->path('school')
             ->spa()
             ->login()
+            ->passwordReset()
+            ->profile(\App\Filament\Pages\Auth\EditProfile::class, isSimple: false)
             ->defaultThemeMode(ThemeMode::Light)
             ->font('Montserrat')
             ->colors([

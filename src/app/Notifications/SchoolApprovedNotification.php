@@ -26,16 +26,15 @@ class SchoolApprovedNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Pendaftaran Sekolah MindfulEdu Disetujui')
+            ->subject('Pendaftaran Sekolah MindfullEdu Disetujui')
             ->greeting('Halo '.$this->school->contact_name.',')
-            ->line('Pendaftaran sekolah Anda di MindfulEdu telah disetujui.')
+            ->line('Pendaftaran sekolah Anda di MindfullEdu telah disetujui.')
             ->line('Sekolah: '.$this->school->name)
             ->line('Akun Administrator Sekolah:')
             ->line('Email / Username: '.$this->loginEmail)
             ->line('Password Sementara: '.$this->temporaryPassword)
             ->action('Masuk Panel Admin Sekolah', url('/school'))
             ->line('Silakan login menggunakan akun tersebut.')
-            ->line('Untuk keamanan akun, Anda akan diminta mengganti password setelah login pertama.')
             ->salutation('MindfulEdu');
     }
 }

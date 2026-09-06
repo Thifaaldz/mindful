@@ -11,6 +11,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Hash;
 
 class ParentResource extends Resource
 {
@@ -43,7 +44,7 @@ class ParentResource extends Resource
 
     public static function canEdit($record): bool
     {
-        return false;
+        return (bool) auth()->user()?->isSchoolAdmin();
     }
 
     public static function form(Form $form): Form
@@ -51,6 +52,28 @@ class ParentResource extends Resource
         return $form->schema([
             Forms\Components\TextInput::make('name')->label('Nama'),
             Forms\Components\TextInput::make('email')->label('Email'),
+            Forms\Components\Section::make('Manajemen Password')
+                ->description('Isi hanya jika orang tua lupa password atau perlu reset akses.')
+                ->columns(2)
+                ->schema([
+                    Forms\Components\TextInput::make('password')
+                        ->label('Password Baru')
+                        ->password()
+                        ->confirmed()
+                        ->revealable()
+                        ->minLength(8)
+                        ->dehydrateStateUsing(fn ($state) => Hash::make($state))
+                        ->dehydrated(fn ($state) => filled($state)),
+                    Forms\Components\TextInput::make('password_confirmation')
+                        ->label('Konfirmasi Password Baru')
+                        ->password()
+                        ->revealable()
+                        ->dehydrated(false),
+                    Forms\Components\Toggle::make('must_change_password')
+                        ->label('Wajib ganti password saat login berikutnya')
+                        ->columnSpanFull(),
+                ])
+                ->columnSpanFull(),
         ]);
     }
 
@@ -71,6 +94,7 @@ class ParentResource extends Resource
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
+                Tables\Actions\EditAction::make(),
             ]);
     }
 
@@ -79,6 +103,7 @@ class ParentResource extends Resource
         return [
             'index' => Pages\ListParents::route('/'),
             'view' => Pages\ViewParent::route('/{record}'),
+            'edit' => Pages\EditParent::route('/{record}/edit'),
         ];
     }
 }

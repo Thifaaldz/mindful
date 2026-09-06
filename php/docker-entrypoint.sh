@@ -23,8 +23,8 @@ APP_ENV=local
 APP_KEY=base64:jU6xg8sp9ia37ypFlTVk1CAFx6MmeXRukO1W987uUzI=
 APP_DEBUG=true
 APP_TIMEZONE='Asia/Jakarta'
-APP_URL="https://${PROJECT_NAME}.test"
-ASSET_URL="https://${PROJECT_NAME}.test"
+APP_URL="https://mindfulapps.test"
+ASSET_URL="https://mindfulapps.test"
 DEBUGBAR_ENABLED=false
 ASSET_PREFIX=
 # ASSET_PREFIX=/dev/kit/public example in case deployed inside a folder
@@ -78,7 +78,7 @@ MAIL_HOST=127.0.0.1
 MAIL_PORT=2525
 MAIL_USERNAME=null
 MAIL_PASSWORD=null
-MAIL_FROM_ADDRESS="noreply@mindfuledu.test"
+MAIL_FROM_ADDRESS="noreply@pkmueu.online"
 MAIL_FROM_NAME="MindfulEdu"
 RESEND_KEY=
 

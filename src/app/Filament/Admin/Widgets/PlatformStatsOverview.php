@@ -52,8 +52,8 @@ class PlatformStatsOverview extends BaseWidget
                 ->description($completionRate . '% sudah check-out')
                 ->icon('heroicon-o-clipboard-document-check')
                 ->color($completionRate >= 70 ? 'success' : 'warning'),
-            Stat::make('Review Journal Hari Ini', $journalReviewsToday)
-                ->description($aiReviewsToday . ' berbasis AI')
+            Stat::make('Analisa Jurnal Hari Ini', $journalReviewsToday)
+                ->description($aiReviewsToday . ' analisa otomatis')
                 ->icon('heroicon-o-sparkles')
                 ->color($aiReviewsToday > 0 ? 'success' : 'gray'),
             Stat::make('Analisis Burnout (7 hari)', $latestAnalyses)

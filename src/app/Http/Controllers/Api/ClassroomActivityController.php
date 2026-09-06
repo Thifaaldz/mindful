@@ -125,6 +125,10 @@ class ClassroomActivityController extends Controller
                 $analysis = $student
                     ? $this->burnoutAnalysisService->preview($student, 'daily', $date)
                     : null;
+                $hasJournal = filled($studentActivity->checkout_fact) || filled($studentActivity->checkout_feeling);
+                $recommendedTactic = $hasJournal
+                    ? $this->burnoutAnalysisService->recommendedTacticForJournalActivity($studentActivity)
+                    : null;
 
                 return [
                     'student' => [
@@ -140,6 +144,7 @@ class ClassroomActivityController extends Controller
                         ] : null,
                     ],
                     'activity' => $studentActivity,
+                    'activity_condition' => $this->activityCondition($studentActivity),
                     'checkin' => [
                         'at' => $studentActivity->checkin_at?->toIso8601String(),
                         'mood' => $studentActivity->checkin_mood,
@@ -156,6 +161,10 @@ class ClassroomActivityController extends Controller
                         'plan' => $studentActivity->checkout_plan,
                         'suggestion' => $studentActivity->checkout_suggestion,
                         'analysis_source' => $studentActivity->checkout_analysis_source,
+                        'crisis_flag' => (bool) $studentActivity->checkout_crisis_flag,
+                        'burnout_dimensions' => $studentActivity->checkout_auto_burnout_tags ?? [],
+                        'raw_response' => $this->decodedCheckoutAnalysis($studentActivity),
+                        'recommended_tactic' => $recommendedTactic,
                     ],
                     'burnout_analysis' => $analysis,
                 ];
@@ -235,5 +244,38 @@ class ClassroomActivityController extends Controller
         return filled($student->school)
             && filled($activity->owner?->school)
             && strtolower(trim($student->school)) === strtolower(trim((string) $activity->owner?->school));
+    }
+
+    private function activityCondition(Activity $activity): string
+    {
+        if ($activity->checkout_at === null) {
+            return 'belum';
+        }
+
+        if ($activity->checkout_crisis_flag) {
+            return 'merah';
+        }
+
+        $mood = $activity->checkout_mood_detected ?: $activity->checkout_mood;
+        if (in_array($mood, ['cemas', 'sedih', 'marah', 'lelah'], true)) {
+            return 'kuning';
+        }
+
+        if (filled($activity->checkout_auto_burnout_tags)) {
+            return 'kuning';
+        }
+
+        return 'hijau';
+    }
+
+    private function decodedCheckoutAnalysis(Activity $activity): array
+    {
+        if (! is_string($activity->checkout_analysis_raw_response) || trim($activity->checkout_analysis_raw_response) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($activity->checkout_analysis_raw_response, true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 }

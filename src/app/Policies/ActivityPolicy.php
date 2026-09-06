@@ -3,7 +3,7 @@
 namespace App\Policies;
 
 use App\Models\User;
-use Spatie\Activitylog\Models\Activity;
+use App\Models\Activity;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class ActivityPolicy
@@ -15,7 +15,7 @@ class ActivityPolicy
      */
     public function viewAny(User $user): bool
     {
-        return $user->can('view_any_activity');
+        return $user->can('view_any_student::observation');
     }
 
     /**
@@ -23,7 +23,7 @@ class ActivityPolicy
      */
     public function view(User $user, Activity $activity): bool
     {
-        return $user->can('view_activity');
+        return $user->can('view_student::observation');
     }
 
     /**
@@ -31,7 +31,7 @@ class ActivityPolicy
      */
     public function create(User $user): bool
     {
-        return $user->can('create_activity');
+        return $user->can('create_student::observation');
     }
 
     /**
@@ -39,7 +39,7 @@ class ActivityPolicy
      */
     public function update(User $user, Activity $activity): bool
     {
-        return $user->can('update_activity');
+        return $user->can('update_student::observation');
     }
 
     /**
@@ -47,7 +47,7 @@ class ActivityPolicy
      */
     public function delete(User $user, Activity $activity): bool
     {
-        return $user->can('delete_activity');
+        return $user->can('delete_student::observation');
     }
 
     /**
@@ -55,7 +55,7 @@ class ActivityPolicy
      */
     public function deleteAny(User $user): bool
     {
-        return $user->can('delete_any_activity');
+        return $user->can('delete_any_student::observation');
     }
 
     /**

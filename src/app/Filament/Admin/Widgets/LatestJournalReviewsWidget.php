@@ -13,7 +13,7 @@ class LatestJournalReviewsWidget extends BaseWidget
 
     protected int|string|array $columnSpan = 2;
 
-    protected static ?string $heading = 'Review Journal Terbaru';
+    protected static ?string $heading = 'Analisa Jurnal Terbaru';
 
     public function table(Table $table): Table
     {
@@ -34,26 +34,18 @@ class LatestJournalReviewsWidget extends BaseWidget
                     ->label('Activity')
                     ->limit(28)
                     ->searchable(),
-                Tables\Columns\TextColumn::make('checkout_mood_detected')
-                    ->label('Mood')
-                    ->badge()
-                    ->colors([
-                        'success' => ['senang', 'tenang', 'netral'],
-                        'warning' => ['cemas', 'sedih', 'lelah'],
-                        'danger' => ['marah'],
-                    ]),
                 Tables\Columns\TextColumn::make('checkout_analysis_source')
                     ->label('Tipe Analisis')
                     ->badge()
                     ->formatStateUsing(
-                        fn (?string $state) => in_array($state, ['gemini', 'fastapi'], true) ? 'Berbasis AI' : 'Lokal'
+                        fn (?string $state) => in_array($state, ['gemini', 'fastapi', 'mock'], true) ? 'Analisa' : 'Lokal'
                     )
                     ->colors([
-                        'success' => ['gemini', 'fastapi'],
-                        'gray' => ['php-fallback', 'mock'],
+                        'success' => ['gemini', 'fastapi', 'mock'],
+                        'gray' => ['php-fallback', 'local'],
                     ]),
                 Tables\Columns\TextColumn::make('checkout_suggestion')
-                    ->label('Review AI')
+                    ->label('Analisa Jurnal')
                     ->limit(62)
                     ->wrap(),
                 Tables\Columns\IconColumn::make('checkout_crisis_flag')

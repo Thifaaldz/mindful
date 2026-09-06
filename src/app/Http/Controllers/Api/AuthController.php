@@ -264,6 +264,40 @@ class AuthController extends Controller
         return response()->json(['user' => $this->formatUser($user->refresh())]);
     }
 
+    public function updatePassword(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => 'Validasi gagal', 'errors' => $validator->errors()], 422);
+        }
+
+        $user = $request->user();
+        $data = $validator->validated();
+
+        if (! Hash::check($data['current_password'], $user->password)) {
+            return response()->json([
+                'message' => 'Password lama tidak sesuai',
+                'errors' => [
+                    'current_password' => ['Password lama tidak sesuai.'],
+                ],
+            ], 422);
+        }
+
+        $user->forceFill([
+            'password' => Hash::make($data['password']),
+            'must_change_password' => false,
+        ])->save();
+
+        return response()->json([
+            'message' => 'Password berhasil diperbarui',
+            'user' => $this->formatUser($user->refresh()),
+        ]);
+    }
+
     private function verifyGoogleIdToken(string $idToken): ?array
     {
         try {

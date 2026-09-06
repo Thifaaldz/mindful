@@ -88,16 +88,16 @@ Mobile:
 Production saat ini dapat diarahkan ke:
 
 ```text
-Web/API:      https://mindfullapps.pkmueu.online
-API base:     https://mindfullapps.pkmueu.online/api
-Download APK: https://mindfullapps.pkmueu.online/download/android
+Web/API:      https://mindfulapps.pkmueu.online
+API base:     https://mindfulapps.pkmueu.online/api
+Download APK: https://mindfulapps.pkmueu.online/download/android
 ```
 
 Local default:
 
 ```text
-Web/API:      https://mindfulledu.test
-API base:     https://mindfulledu.test/api
+Web/API:      https://mindfulapps.test
+API base:     https://mindfulapps.test/api
 FastAPI ML:   http://localhost:18000
 MariaDB host: localhost:13306
 ```
@@ -122,7 +122,7 @@ Contoh env Laravel penting:
 APP_NAME=MindfulEdu
 APP_ENV=local
 APP_DEBUG=true
-APP_URL=https://mindfulledu.test
+APP_URL=https://mindfulapps.test
 
 DB_CONNECTION=mariadb
 DB_HOST=db
@@ -150,7 +150,7 @@ Jangan commit API key asli ke GitHub.
 Tambahkan host lokal:
 
 ```bash
-sudo sh -c 'echo "127.0.0.1 mindfulledu.test" >> /etc/hosts'
+sudo sh -c 'echo "127.0.0.1 mindfulapps.test" >> /etc/hosts'
 ```
 
 Buat SSL lokal jika belum ada:
@@ -159,9 +159,9 @@ Buat SSL lokal jika belum ada:
 mkdir -p nginx/ssl
 openssl req -x509 -nodes -days 365 \
   -newkey rsa:2048 \
-  -keyout nginx/ssl/mindfulledu.test.key \
-  -out nginx/ssl/mindfulledu.test.crt \
-  -subj "/CN=mindfulledu.test"
+  -keyout nginx/ssl/mindfulapps.test.key \
+  -out nginx/ssl/mindfulapps.test.crt \
+  -subj "/CN=mindfulapps.test"
 ```
 
 Jalankan container:
@@ -201,16 +201,16 @@ Run ke device/emulator:
 
 ```bash
 flutter run \
-  --dart-define=API_BASE_URL=https://mindfulledu.test/api \
-  --dart-define=API_FALLBACK_URLS=https://mindfulledu.test/api,https://10.0.2.2/api
+  --dart-define=API_BASE_URL=https://mindfulapps.test/api \
+  --dart-define=API_FALLBACK_URLS=https://mindfulapps.test/api,https://10.0.2.2/api
 ```
 
 Build APK release production:
 
 ```bash
 flutter build apk --release \
-  --dart-define=API_BASE_URL=https://mindfullapps.pkmueu.online/api \
-  --dart-define=API_FALLBACK_URLS=https://mindfullapps.pkmueu.online/api \
+  --dart-define=API_BASE_URL=https://mindfulapps.pkmueu.online/api \
+  --dart-define=API_FALLBACK_URLS=https://mindfulapps.pkmueu.online/api \
   --dart-define=GOOGLE_SERVER_CLIENT_ID=your-google-web-client-id.apps.googleusercontent.com
 ```
 
@@ -248,7 +248,7 @@ cp /home/ubuntu/mindfuledu.apk src/public/downloads/mindfuledu.apk
 Cek:
 
 ```bash
-curl -I https://mindfullapps.pkmueu.online/download/android
+curl -I https://mindfulapps.pkmueu.online/download/android
 ```
 
 ## Role dan Akses
@@ -650,7 +650,7 @@ curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-l
 Base URL:
 
 ```text
-https://mindfullapps.pkmueu.online/api
+https://mindfulapps.pkmueu.online/api
 ```
 
 Header authenticated request:
@@ -1089,7 +1089,7 @@ Build dengan define:
 
 ```bash
 flutter build apk --release \
-  --dart-define=API_BASE_URL=https://mindfullapps.pkmueu.online/api \
+  --dart-define=API_BASE_URL=https://mindfulapps.pkmueu.online/api \
   --dart-define=GOOGLE_SERVER_CLIENT_ID=your-google-web-client-id.apps.googleusercontent.com
 ```
 

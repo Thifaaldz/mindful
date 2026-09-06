@@ -25,6 +25,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::put('/me/profile', [AuthController::class, 'updateProfile']);
     Route::post('/me/avatar', [AuthController::class, 'updateAvatar']);
+    Route::put('/me/password', [AuthController::class, 'updatePassword']);
     Route::get('/reminder-preference', [ReminderPreferenceController::class, 'show']);
     Route::put('/reminder-preference', [ReminderPreferenceController::class, 'update']);
     Route::apiResource('activities', ActivityController::class)

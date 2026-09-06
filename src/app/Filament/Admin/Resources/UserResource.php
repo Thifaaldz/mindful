@@ -100,17 +100,32 @@ class UserResource extends Resource
                             ->default('approved')
                             ->required(),
 
+                    ]),
+
+                Forms\Components\Section::make('Manajemen Password')
+                    ->description('Gunakan untuk membuat akun baru atau reset password pengguna.')
+                    ->columns(2)
+                    ->schema([
                         Forms\Components\TextInput::make('password')
+                            ->label('Password Baru')
                             ->password()
                             ->confirmed()
+                            ->revealable()
+                            ->minLength(8)
                             ->columnSpan(1)
                             ->dehydrateStateUsing(fn ($state) => Hash::make($state))
                             ->dehydrated(fn ($state) => filled($state))
                             ->required(fn (string $context): bool => $context === 'create'),
                         Forms\Components\TextInput::make('password_confirmation')
+                            ->label('Konfirmasi Password Baru')
                             ->required(fn (string $context): bool => $context === 'create')
                             ->columnSpan(1)
-                            ->password(),
+                            ->password()
+                            ->revealable()
+                            ->dehydrated(false),
+                        Forms\Components\Toggle::make('must_change_password')
+                            ->label('Wajib ganti password saat login berikutnya')
+                            ->columnSpanFull(),
                     ]),
 
                 Forms\Components\Section::make('Roles')

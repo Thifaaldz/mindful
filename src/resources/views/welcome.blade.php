@@ -757,7 +757,7 @@
                         <li>Guru</li>
                         <li>Siswa</li>
                         <li>Orang tua</li>
-                        <li>Berbasis AI</li>
+                        <li>Analisa cerdas</li>
                     </ul>
                     <h1>MindfulEdu</h1>
                     <p>
@@ -777,7 +777,7 @@
                             <span>Guru, siswa, dan orang tua memiliki alur berbeda.</span>
                         </div>
                         <div class="hero-stat">
-                            <strong>AI Review</strong>
+                            <strong>Analisa Jurnal</strong>
                             <span>Jurnal dianalisis untuk memberi saran yang mudah dipahami.</span>
                         </div>
                         <div class="hero-stat">
@@ -832,8 +832,8 @@
                     </article>
                     <article class="feature">
                         <div class="feature-icon">03</div>
-                        <h3>Review Berbasis AI</h3>
-                        <p>Review jurnal menyimpan hasil AI dan memilih teknik mindfulness dari daftar teknik yang tersedia.</p>
+                        <h3>Analisa dan Rekomendasi</h3>
+                        <p>Analisa jurnal menyimpan hasil evaluasi dan memilih teknik mindfulness dari daftar teknik yang tersedia.</p>
                     </article>
                     <article class="feature">
                         <div class="feature-icon">04</div>
@@ -850,13 +850,13 @@
                     <span>Pembaruan terbaru</span>
                     <h2>Analisis, rekomendasi, dan role sudah diselaraskan.</h2>
                     <p>
-                        Versi ini fokus pada alur activity journal, review AI, rekomendasi teknik mindfulness,
+                        Versi ini fokus pada alur activity journal, analisa jurnal, rekomendasi teknik mindfulness,
                         serta pembatas akses guru, siswa, dan orang tua agar pemakaian lebih jelas.
                     </p>
                 </div>
                 <div class="update-list">
                     <article class="update-item">
-                        <strong>Rekomendasi mengikuti review AI</strong>
+                        <strong>Rekomendasi mengikuti hasil analisa</strong>
                         <p>Teknik yang tampil di analisis depan sekarang mengikuti teknik yang dipilih dari review jurnal.</p>
                     </article>
                     <article class="update-item">
@@ -865,7 +865,7 @@
                     </article>
                     <article class="update-item">
                         <strong>History analisis tersimpan</strong>
-                        <p>Hasil analisis periode disimpan agar tidak perlu memanggil AI berulang saat data belum berubah.</p>
+                        <p>Hasil analisis periode disimpan agar evaluasi tidak perlu dijalankan berulang saat data belum berubah.</p>
                     </article>
                     <article class="update-item">
                         <strong>Toolkit mindfulness terhubung</strong>
@@ -936,13 +936,13 @@
                         <h2>Informasi aplikasi</h2>
                         <p>
                             MindfulEdu tersedia sebagai aplikasi Android untuk guru, siswa, dan orang tua, dengan backend web
-                            sebagai pusat API, autentikasi, data kelas, analisis berbasis AI, observasi, dan konfigurasi sistem.
+                            sebagai pusat API, autentikasi, data kelas, analisis, observasi, dan konfigurasi sistem.
                         </p>
                     </div>
                     <ul>
                         <li><span class="check">✓</span><span>Login guru, siswa, dan orang tua dengan akses yang dipisahkan.</span></li>
                         <li><span class="check">✓</span><span>Activity kelas mendukung filter kelas atau seluruh siswa satu sekolah.</span></li>
-                        <li><span class="check">✓</span><span>Review AI menampilkan status hijau, kuning, merah, dan saran teknik.</span></li>
+                        <li><span class="check">✓</span><span>Analisa jurnal menampilkan status hijau, kuning, merah, dan saran teknik.</span></li>
                         <li><span class="check">✓</span><span>Toolkit STOP, grounding, body scan, breathing, dan teknik mindful lainnya.</span></li>
                     </ul>
                 </div>

@@ -1345,8 +1345,8 @@ Contoh build APK release:
 
 ```bash
 flutter build apk --release \
-  --dart-define=API_BASE_URL=https://mindfullapps.pkmueu.online/api \
-  --dart-define=API_FALLBACK_URLS=https://mindfullapps.pkmueu.online/api \
+  --dart-define=API_BASE_URL=https://mindfulapps.pkmueu.online/api \
+  --dart-define=API_FALLBACK_URLS=https://mindfulapps.pkmueu.online/api \
   --dart-define=GOOGLE_SERVER_CLIENT_ID=ISI_CLIENT_ID_WEB
 ```
 
@@ -1380,8 +1380,8 @@ cd mindfuledu
 flutter clean
 flutter pub get
 flutter build apk --release \
-  --dart-define=API_BASE_URL=https://mindfullapps.pkmueu.online/api \
-  --dart-define=API_FALLBACK_URLS=https://mindfullapps.pkmueu.online/api \
+  --dart-define=API_BASE_URL=https://mindfulapps.pkmueu.online/api \
+  --dart-define=API_FALLBACK_URLS=https://mindfulapps.pkmueu.online/api \
   --dart-define=GOOGLE_SERVER_CLIENT_ID=ISI_CLIENT_ID_WEB
 ```
 
@@ -1411,7 +1411,7 @@ docker compose restart nginx
 Download tersedia di:
 
 ```text
-https://mindfullapps.pkmueu.online/download/android
+https://mindfulapps.pkmueu.online/download/android
 ```
 
 ---

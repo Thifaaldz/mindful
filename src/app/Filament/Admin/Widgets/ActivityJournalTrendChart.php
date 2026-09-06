@@ -50,7 +50,7 @@ class ActivityJournalTrendChart extends ChartWidget
                     'tension' => 0.35,
                 ],
                 [
-                    'label' => 'Review AI/Jurnal',
+                    'label' => 'Analisa/Jurnal',
                     'data' => $labels->map(fn (Carbon $date) => $aiReviews->get($date->format('Y-m-d'), collect())->count())->values(),
                     'borderColor' => '#e9be51',
                     'backgroundColor' => 'rgba(233, 190, 81, 0.14)',
