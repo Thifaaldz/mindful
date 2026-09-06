@@ -69,6 +69,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _openChangePassword() async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => const _ChangePasswordSheet(),
+    );
+
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Password diperbarui')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = context.watch<Session>();
@@ -81,6 +96,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final latestLogin = loginHistoryMap(user['latest_login']);
     final loginHistories = (user['login_histories'] as List? ?? const [])
         .cast<dynamic>();
+    final mustChangePassword = user['must_change_password'] == true;
 
     return Scaffold(
       body: SafeArea(
@@ -148,6 +164,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     login: latestLogin,
                     color: accountRole.primary,
                   ),
+                  if (mustChangePassword) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF7ED),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFF97316)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.lock_clock_outlined,
+                            color: Color(0xFFC2410C),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Password akun perlu diperbarui agar akses tetap aman.',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: const Color(0xFF9A3412),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _openChangePassword,
+                            child: const Text('Ubah'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 18),
                   if (role == 'teacher' || role == 'student')
                     FilledButton.icon(
@@ -214,6 +266,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         builder: (_) => const ReminderSettingsScreen(),
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  _ActionCard(
+                    icon: Icons.lock_reset_outlined,
+                    title: 'Ubah Password',
+                    subtitle: 'Perbarui password akun aplikasi.',
+                    onTap: _openChangePassword,
                   ),
                   const SizedBox(height: 24),
                   OutlinedButton.icon(
@@ -383,6 +442,166 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
   }
 
   String _formatApiError(ApiException error) {
+    final errors = error.errors;
+    if (errors == null || errors.isEmpty) return error.message;
+
+    final messages = <String>[];
+    for (final value in errors.values) {
+      if (value is List) {
+        messages.addAll(value.map((item) => '$item'));
+      } else if (value != null) {
+        messages.add('$value');
+      }
+    }
+
+    return messages.isEmpty ? error.message : messages.join('\n');
+  }
+}
+
+class _ChangePasswordSheet extends StatefulWidget {
+  const _ChangePasswordSheet();
+
+  @override
+  State<_ChangePasswordSheet> createState() => _ChangePasswordSheetState();
+}
+
+class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _currentPasswordController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _passwordConfirmationController = TextEditingController();
+  bool _loading = false;
+  bool _obscure = true;
+  String? _error;
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      await context.read<Session>().updatePassword(
+        currentPassword: _currentPasswordController.text,
+        password: _passwordController.text,
+        passwordConfirmation: _passwordConfirmationController.text,
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } on ApiException catch (e) {
+      setState(() => _error = _formatPasswordApiError(e));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _currentPasswordController.dispose();
+    _passwordController.dispose();
+    _passwordConfirmationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 18, 20, bottomInset + 20),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Ubah Password',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Tutup',
+                    onPressed: _loading ? null : () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _currentPasswordController,
+                obscureText: _obscure,
+                decoration: InputDecoration(
+                  labelText: 'Password Lama',
+                  suffixIcon: IconButton(
+                    tooltip: _obscure ? 'Tampilkan' : 'Sembunyikan',
+                    onPressed: () => setState(() => _obscure = !_obscure),
+                    icon: Icon(
+                      _obscure
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                    ),
+                  ),
+                ),
+                validator: (value) => (value == null || value.isEmpty)
+                    ? 'Password lama wajib diisi'
+                    : null,
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _passwordController,
+                obscureText: _obscure,
+                decoration: const InputDecoration(labelText: 'Password Baru'),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Password baru wajib diisi';
+                  }
+                  if (value.length < 8) {
+                    return 'Password minimal 8 karakter';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _passwordConfirmationController,
+                obscureText: _obscure,
+                decoration: const InputDecoration(
+                  labelText: 'Konfirmasi Password Baru',
+                ),
+                validator: (value) => value != _passwordController.text
+                    ? 'Konfirmasi password tidak sama'
+                    : null,
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!, style: const TextStyle(color: Colors.red)),
+              ],
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: _loading ? null : _save,
+                icon: _loading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.lock_reset_outlined),
+                label: const Text('Simpan Password'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatPasswordApiError(ApiException error) {
     final errors = error.errors;
     if (errors == null || errors.isEmpty) return error.message;
 

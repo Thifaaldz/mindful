@@ -949,7 +949,6 @@ class _ActivityCard extends StatelessWidget {
         activity['checkout_at'] == null &&
         status != 'cancelled' &&
         teacherCheckoutReady;
-    final detectedMood = '${activity['checkout_mood_detected'] ?? ''}'.trim();
     final suggestion = '${activity['checkout_suggestion'] ?? ''}'.trim();
     final recommendedTactic = _jsonMap(activity['recommended_tactic']);
     final crisis = activity['checkout_crisis_flag'] == true;
@@ -958,13 +957,13 @@ class _ActivityCard extends StatelessWidget {
             .map((item) => '$item')
             .where((item) => item.isNotEmpty)
             .toList();
-    final hasAiReview = suggestion.isNotEmpty || recommendedTactic.isNotEmpty;
+    final hasReview = suggestion.isNotEmpty || recommendedTactic.isNotEmpty;
 
     void openActivityAnalysis() {
       showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: Text('${activity['title'] ?? 'Review AI'}'),
+          title: Text('${activity['title'] ?? 'Analisa'}'),
           scrollable: true,
           content: _ActivityAnalysisDialogContent(
             activity: activity,
@@ -1097,11 +1096,6 @@ class _ActivityCard extends StatelessWidget {
                       : 'Menunggu guru',
                   color: teacherCheckinReady ? role.primary : AppTheme.muted,
                 ),
-              if (detectedMood.isNotEmpty)
-                StatusPill(
-                  label: 'Terdeteksi: $detectedMood',
-                  color: role.primary,
-                ),
               if (crisis)
                 StatusPill(
                   label: 'Perlu dukungan segera',
@@ -1115,12 +1109,12 @@ class _ActivityCard extends StatelessWidget {
               ),
             ],
           ),
-          if (hasAiReview) ...[
+          if (hasReview) ...[
             const SizedBox(height: 10),
             OutlinedButton.icon(
               onPressed: openActivityAnalysis,
               icon: const Icon(Icons.auto_awesome),
-              label: const Text('Review AI'),
+              label: const Text('Analisa'),
             ),
           ],
           if (isStudentClassroom &&
@@ -1202,11 +1196,6 @@ class _ActivityAnalysisDialogContent extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            if ('${activity['checkout_mood_detected'] ?? ''}'.isNotEmpty)
-              StatusPill(
-                label: 'Mood: ${activity['checkout_mood_detected']}',
-                color: primary,
-              ),
             if (source.isNotEmpty)
               StatusPill(
                 label: _activitySourceLabel(source),
@@ -1313,7 +1302,7 @@ bool _isActivityAiSource(String source) {
 }
 
 String _activitySourceLabel(String source) {
-  return _isActivityAiSource(source) ? 'Berbasis AI' : 'Lokal';
+  return _isActivityAiSource(source) ? 'Analisa' : 'Analisa lokal';
 }
 
 String _conditionLabel(String category) {
@@ -1601,16 +1590,11 @@ class _ClassroomObservationSheet extends StatelessWidget {
                                     label: 'Out: ${checkout['mood'] ?? '-'}',
                                     color: AppTheme.muted,
                                   ),
-                                  if (checkout['mood_detected'] != null)
-                                    StatusPill(
-                                      label: 'AI: ${checkout['mood_detected']}',
-                                      color: const Color(0xFF24718E),
-                                    ),
                                   if (source.isNotEmpty)
                                     StatusPill(
                                       label: _isActivityAiSource(source)
-                                          ? 'Review AI'
-                                          : 'Review lokal',
+                                          ? 'Analisa'
+                                          : 'Analisa lokal',
                                       color: _isActivityAiSource(source)
                                           ? const Color(0xFF24718E)
                                           : AppTheme.muted,
@@ -1639,7 +1623,7 @@ class _ClassroomObservationSheet extends StatelessWidget {
                                 value: '${checkout['plan'] ?? ''}',
                               ),
                               _ObservationDetailLine(
-                                label: 'Review AI',
+                                label: 'Analisa dan saran',
                                 value: '${checkout['suggestion'] ?? ''}',
                               ),
                               if (tacticTitle.isNotEmpty) ...[
@@ -1802,7 +1786,9 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
           schoolClassId: _selectedActivityType() == 'classroom'
               ? _schoolClassId
               : null,
-          schoolClassName: _schoolClassId == null ? _classroomClassName() : null,
+          schoolClassName: _schoolClassId == null
+              ? _classroomClassName()
+              : null,
         );
         if (mounted) {
           Navigator.of(context).pop(
@@ -1828,7 +1814,9 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
           schoolClassId: _selectedActivityType() == 'classroom'
               ? _schoolClassId
               : null,
-          schoolClassName: _schoolClassId == null ? _classroomClassName() : null,
+          schoolClassName: _schoolClassId == null
+              ? _classroomClassName()
+              : null,
           repeatType: _repeatType,
           repeatUntil: _repeating
               ? DateFormat('yyyy-MM-dd').format(_repeatUntil)
@@ -1939,7 +1927,9 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
       return _emptyToNull(selected ?? '');
     }
 
-    return _teacherClasses.isEmpty ? _emptyToNull(_schoolClassController.text) : null;
+    return _teacherClasses.isEmpty
+        ? _emptyToNull(_schoolClassController.text)
+        : null;
   }
 
   Future<void> _loadTeacherClasses() async {
@@ -1956,7 +1946,9 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
       setState(() {
         _teacherClasses
           ..clear()
-          ..addAll(classes.map((item) => Map<String, dynamic>.from(item as Map)));
+          ..addAll(
+            classes.map((item) => Map<String, dynamic>.from(item as Map)),
+          );
       });
     } catch (_) {
       // Legacy activities can still use their existing class text if class fetch fails.
@@ -2041,7 +2033,8 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
     final selectedClassInOptions = _teacherClasses.any(
       (item) => item['id'] == _schoolClassId,
     );
-    final hasSelectedClass = _schoolClassId == null ||
+    final hasSelectedClass =
+        _schoolClassId == null ||
         selectedClassInOptions ||
         _schoolClassController.text.trim().isNotEmpty;
     if (_activityKind.isEmpty && kindOptions.isNotEmpty) {
@@ -2212,7 +2205,8 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
                     : (value) {
                         setState(() {
                           _schoolClassId = value;
-                          _schoolClassController.text = _classroomClassName() ?? '';
+                          _schoolClassController.text =
+                              _classroomClassName() ?? '';
                         });
                       },
               ),

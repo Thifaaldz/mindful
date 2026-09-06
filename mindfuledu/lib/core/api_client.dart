@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart';
 /// Base URL of the MindfulEdu Laravel API.
 ///
 /// - iOS simulator / physical device on same Wi-Fi as the docker host: use the
-///   machine's LAN IP or the `mindfulledu.test` hostname (if resolvable).
+///   machine's LAN IP or the `mindfulapps.test` hostname (if resolvable).
 /// - Android emulator: use `https://10.0.2.2` to reach the host machine.
 /// - Android physical device: use the machine's LAN IP.
 /// - Android emulator: use `https://10.0.2.2/api` to reach the host machine.

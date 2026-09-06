@@ -506,7 +506,7 @@ class _JournalReviewCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Review AI Jurnal ${_periodReviewLabel(period)}',
+                  'Analisa Jurnal ${_periodReviewLabel(period)}',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
@@ -641,7 +641,7 @@ class _JournalReviewTile extends StatelessWidget {
       showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: Text('${review['title'] ?? 'Review Jurnal'}'),
+          title: Text('${review['title'] ?? 'Analisa Jurnal'}'),
           scrollable: true,
           content: _JournalReviewDialogContent(review: review),
           actions: [
@@ -704,8 +704,6 @@ class _JournalReviewDialogContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.secondary;
-    final mood = '${review['mood_detected'] ?? review['mood'] ?? ''}'.trim();
     final condition = '${review['condition'] ?? _categoryFromReview(review)}';
     final score = review['score'];
     final suggestion = '${review['suggestion'] ?? ''}'.trim();
@@ -759,8 +757,6 @@ class _JournalReviewDialogContent extends StatelessWidget {
           runSpacing: 8,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            if (mood.isNotEmpty)
-              StatusPill(label: 'Mood: $mood', color: primary),
             StatusPill(
               label: score == null
                   ? _categoryLabel(condition)
@@ -1841,7 +1837,7 @@ String _reviewDateLabel(dynamic date) {
 }
 
 String _sourceLabel(String source) {
-  return _isAiSource(source) ? 'Berbasis AI' : 'Lokal';
+  return _isAiSource(source) ? 'Analisa' : 'Analisa lokal';
 }
 
 String _categoryFromReview(Map<String, dynamic> review) {

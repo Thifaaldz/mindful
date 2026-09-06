@@ -361,7 +361,6 @@ class _ActivityAnalysisCard extends StatelessWidget {
     final condition = '${review['condition'] ?? _categoryFromReview(review)}';
     final score = review['score'];
     final color = _categoryColor(condition);
-    final mood = '${review['mood_detected'] ?? review['mood'] ?? ''}'.trim();
     final fact = '${review['fact'] ?? ''}'.trim();
     final feeling = '${review['feeling'] ?? ''}'.trim();
     final pattern = '${review['pattern'] ?? ''}'.trim();
@@ -444,8 +443,6 @@ class _ActivityAnalysisCard extends StatelessWidget {
                     : '${_categoryLabel(condition)} ${_numValue(score).toStringAsFixed(0)}',
                 color: color,
               ),
-              if (mood.isNotEmpty)
-                StatusPill(label: 'Mood: $mood', color: color),
             ],
           ),
           const SizedBox(height: 12),
@@ -804,7 +801,6 @@ String _categoryFromReview(Map<String, dynamic> review) {
 String _activityInsight(Map<String, dynamic> review) {
   final condition = '${review['condition'] ?? _categoryFromReview(review)}';
   final title = '${review['title'] ?? 'Aktivitas ini'}';
-  final mood = '${review['mood_detected'] ?? review['mood'] ?? ''}'.trim();
   final fact = '${review['fact'] ?? ''}'.trim();
   final feeling = '${review['feeling'] ?? ''}'.trim();
   final tactic = _jsonMap(review['recommended_tactic']);
@@ -816,14 +812,13 @@ String _activityInsight(Map<String, dynamic> review) {
     'hijau' => 'masih relatif stabil dan bisa dipertahankan',
     _ => 'belum memiliki status yang cukup jelas',
   };
-  final moodText = mood.isEmpty ? '' : ' Mood yang terbaca adalah $mood.';
   final factText = fact.isEmpty ? '' : ' Fakta utama: $fact';
   final feelingText = feeling.isEmpty ? '' : ' Perasaan yang muncul: $feeling';
   final tacticText = tacticTitle.isEmpty
       ? ''
       : ' Karena kondisi ini, $tacticTitle berguna sebagai latihan yang paling sesuai untuk aktivitas tersebut.';
 
-  return '$title $conditionText.$moodText$factText$feelingText$tacticText';
+  return '$title $conditionText.$factText$feelingText$tacticText';
 }
 
 String _cleanAnalysisText(String value) {

@@ -128,10 +128,7 @@ class Session extends ChangeNotifier {
             'Pendaftaran berhasil dan menunggu approval Admin Sekolah.',
       );
     }
-    await _persist(
-      data,
-      rememberDevice: rememberDevice,
-    );
+    await _persist(data, rememberDevice: rememberDevice);
   }
 
   Future<void> loginWithGoogleIdToken(
@@ -209,6 +206,26 @@ class Session extends ChangeNotifier {
       fileField: 'avatar',
       filePath: imagePath,
     );
+    user =
+        (response.data as Map<String, dynamic>)['user'] as Map<String, dynamic>;
+    await _saveAccountMetadata();
+    notifyListeners();
+  }
+
+  Future<void> updatePassword({
+    required String currentPassword,
+    required String password,
+    required String passwordConfirmation,
+  }) async {
+    final response = await ApiClient.instance.put(
+      '/me/password',
+      data: {
+        'current_password': currentPassword,
+        'password': password,
+        'password_confirmation': passwordConfirmation,
+      },
+    );
+
     user =
         (response.data as Map<String, dynamic>)['user'] as Map<String, dynamic>;
     await _saveAccountMetadata();
