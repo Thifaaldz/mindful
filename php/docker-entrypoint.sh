@@ -18,7 +18,7 @@ if [ ! -f /var/www/html/.env ]; then
 
   # Create .env file with the required values
   cat <<EOF > /var/www/html/.env
-APP_NAME="${PROJECT_NAME}"
+APP_NAME="MindfulEdu"
 APP_ENV=local
 APP_KEY=base64:jU6xg8sp9ia37ypFlTVk1CAFx6MmeXRukO1W987uUzI=
 APP_DEBUG=true
@@ -88,7 +88,7 @@ AWS_DEFAULT_REGION=us-east-1
 AWS_BUCKET=
 AWS_USE_PATH_STYLE_ENDPOINT=false
 
-VITE_APP_NAME="${APP_NAME}"
+VITE_APP_NAME="MindfulEdu"
 MINDFULEDU_ML_URL=http://ml:8000
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-3.5-flash-lite
