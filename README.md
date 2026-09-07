@@ -145,7 +145,7 @@ GEMINI_TIMEOUT_SECONDS=8
 
 Jangan commit API key asli ke GitHub.
 
-## Menjalankan Local Dengan Docker
+## Menjalankan Backend Lokal Dengan Docker
 
 Tambahkan host lokal:
 
@@ -164,14 +164,23 @@ openssl req -x509 -nodes -days 365 \
   -subj "/CN=mindfulapps.test"
 ```
 
-Jalankan container:
+Jalankan atau rebuild container:
 
 ```bash
 docker compose up -d --build
 docker compose ps
 ```
 
-Setup Laravel:
+Container normal:
+
+```text
+mindfulledu_nginx
+mindfulledu_php
+mindfulledu_db
+mindfulledu_ml
+```
+
+Setup Laravel setelah pertama kali clone atau setelah ada update backend:
 
 ```bash
 docker compose exec php composer install
@@ -182,13 +191,27 @@ docker compose exec php php artisan storage:link
 docker compose exec php php artisan optimize:clear
 ```
 
+Test backend lokal:
+
+```bash
+curl -k -I https://127.0.0.1/up
+curl -k -I https://127.0.0.1/api/me
+curl -k https://127.0.0.1/api/public/schools
+```
+
+Catatan:
+
+- `/up` harus `200 OK`.
+- `/api/me` boleh `401 Unauthorized`; itu berarti API hidup tetapi belum login.
+- Jika Flutter dijalankan di HP fisik, pakai IP Wi-Fi laptop, bukan `127.0.0.1`.
+
 Reset database local:
 
 ```bash
 docker compose exec php php artisan migrate:fresh --seed --force
 ```
 
-## Menjalankan Flutter
+## Menjalankan Flutter Lokal
 
 Masuk ke folder aplikasi:
 
@@ -197,7 +220,7 @@ cd mindfuledu
 flutter pub get
 ```
 
-Run ke device/emulator:
+Run ke emulator Android:
 
 ```bash
 flutter run \
@@ -205,10 +228,38 @@ flutter run \
   --dart-define=API_FALLBACK_URLS=https://mindfulapps.test/api,https://10.0.2.2/api
 ```
 
-Build APK release production:
+Run ke HP fisik satu Wi-Fi dengan laptop:
 
 ```bash
+cd /home/kumadz/Documents/Project/mindfulledu-2026
+hostname -I
+```
+
+Ambil IP Wi-Fi laptop, lalu jalankan:
+
+```bash
+cd mindfuledu
+flutter run \
+  --dart-define=API_BASE_URL=https://IP_WIFI_LAPTOP/api \
+  --dart-define=API_FALLBACK_URLS=https://IP_WIFI_LAPTOP/api
+```
+
+Contoh jika IP laptop `192.168.100.60`:
+
+```bash
+flutter run \
+  --dart-define=API_BASE_URL=https://192.168.100.60/api \
+  --dart-define=API_FALLBACK_URLS=https://192.168.100.60/api
+```
+
+Build APK release production terbaru:
+
+```bash
+flutter clean
+flutter pub get
 flutter build apk --release \
+  --build-name=1.0.1 \
+  --build-number=2 \
   --dart-define=API_BASE_URL=https://mindfulapps.pkmueu.online/api \
   --dart-define=API_FALLBACK_URLS=https://mindfulapps.pkmueu.online/api \
   --dart-define=GOOGLE_SERVER_CLIENT_ID=your-google-web-client-id.apps.googleusercontent.com
@@ -220,35 +271,63 @@ Hasil APK:
 mindfuledu/build/app/outputs/flutter-apk/app-release.apk
 ```
 
-## Deploy APK Untuk Download Website
+## Update Backend Production dan Deploy APK
 
-Upload APK ke server:
+Update backend di server AWS:
 
 ```bash
-scp -i /path/to/mindfullness.pem \
-  mindfuledu/build/app/outputs/flutter-apk/app-release.apk \
+chmod 400 ~/Downloads/mindfullness.pem
+ssh -i ~/Downloads/mindfullness.pem ubuntu@16.78.35.91
+cd ~/mindful
+git pull origin main
+docker compose up -d --build
+docker compose exec php composer install --no-dev --optimize-autoloader
+docker compose exec php php artisan migrate --force
+docker compose exec php php artisan filament:assets
+docker compose exec php php artisan vendor:publish --tag=filament-assets --force
+docker compose exec php php artisan storage:link || true
+docker compose exec php php artisan optimize:clear
+docker compose restart php nginx ml
+```
+
+Test server:
+
+```bash
+curl -I https://mindfulapps.pkmueu.online
+curl -I https://mindfulapps.pkmueu.online/up
+curl -I https://mindfulapps.pkmueu.online/api/me
+```
+
+Upload APK dari laptop lokal:
+
+```bash
+cd /home/kumadz/Documents/Project/mindfulledu-2026/mindfuledu
+scp -i ~/Downloads/mindfullness.pem \
+  build/app/outputs/flutter-apk/app-release.apk \
   ubuntu@16.78.35.91:/home/ubuntu/mindfuledu.apk
 ```
 
-Pindahkan ke folder publik Nginx/Laravel sesuai konfigurasi server:
+Pindahkan APK ke public path yang dibaca website:
 
 ```bash
-sudo mkdir -p /var/www/html/download
-sudo mv /home/ubuntu/mindfuledu.apk /var/www/html/download/mindfuledu.apk
-sudo chmod 644 /var/www/html/download/mindfuledu.apk
-```
-
-Jika download route diarahkan dari Laravel, simpan juga di:
-
-```bash
+ssh -i ~/Downloads/mindfullness.pem ubuntu@16.78.35.91
+cd ~/mindful
 mkdir -p src/public/downloads
 cp /home/ubuntu/mindfuledu.apk src/public/downloads/mindfuledu.apk
+chmod 644 src/public/downloads/mindfuledu.apk
+ls -lh src/public/downloads/mindfuledu.apk
 ```
 
-Cek:
+Test download:
 
 ```bash
 curl -I https://mindfulapps.pkmueu.online/download/android
+```
+
+Jika benar, hasilnya `200 OK`. File APK wajib berada di:
+
+```text
+/home/ubuntu/mindful/src/public/downloads/mindfuledu.apk
 ```
 
 ## Role dan Akses
@@ -1158,8 +1237,13 @@ Android Google Sign-In membutuhkan OAuth Client tipe Android dengan:
 Build dengan define:
 
 ```bash
+flutter clean
+flutter pub get
 flutter build apk --release \
+  --build-name=1.0.1 \
+  --build-number=2 \
   --dart-define=API_BASE_URL=https://mindfulapps.pkmueu.online/api \
+  --dart-define=API_FALLBACK_URLS=https://mindfulapps.pkmueu.online/api \
   --dart-define=GOOGLE_SERVER_CLIENT_ID=your-google-web-client-id.apps.googleusercontent.com
 ```
 

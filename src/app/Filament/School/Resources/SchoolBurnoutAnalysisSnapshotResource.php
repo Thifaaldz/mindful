@@ -23,6 +23,7 @@ class SchoolBurnoutAnalysisSnapshotResource extends Resource
     protected static ?string $pluralModelLabel = 'Burnout Analysis';
     protected static ?string $navigationIcon = 'heroicon-o-chart-bar-square';
     protected static ?int $navigationSort = 2;
+    protected static bool $shouldRegisterNavigation = false;
 
     public static function getEloquentQuery(): Builder
     {

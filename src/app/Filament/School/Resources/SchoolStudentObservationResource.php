@@ -17,10 +17,10 @@ class SchoolStudentObservationResource extends Resource
     use BelongsToSchoolPanel;
 
     protected static ?string $model = Activity::class;
-    protected static ?string $navigationGroup = 'Monitoring';
-    protected static ?string $navigationLabel = 'Student Observation';
-    protected static ?string $modelLabel = 'Student Observation';
-    protected static ?string $pluralModelLabel = 'Student Observation';
+    protected static ?string $navigationGroup = 'Murid';
+    protected static ?string $navigationLabel = 'Observasi Murid';
+    protected static ?string $modelLabel = 'Observasi Murid';
+    protected static ?string $pluralModelLabel = 'Observasi Murid';
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-check';
     protected static ?int $navigationSort = 3;
 

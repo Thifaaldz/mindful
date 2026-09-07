@@ -16,7 +16,7 @@ class MindfulnessSessionResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-clock';
 
-    protected static ?string $navigationGroup = 'Monitoring';
+    protected static ?string $navigationGroup = 'Mindfulness';
 
     protected static ?string $recordTitleAttribute = 'user.name';
 

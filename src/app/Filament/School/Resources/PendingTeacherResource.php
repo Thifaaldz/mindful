@@ -17,12 +17,12 @@ class PendingTeacherResource extends Resource
     use HandlesSchoolUserApproval;
 
     protected static ?string $model = User::class;
-    protected static ?string $navigationGroup = 'Pendaftaran';
-    protected static ?string $navigationLabel = 'Guru Pending';
+    protected static ?string $navigationGroup = 'Guru';
+    protected static ?string $navigationLabel = 'Pendaftaran Guru';
     protected static ?string $modelLabel = 'Guru Pending';
     protected static ?string $pluralModelLabel = 'Guru Pending';
     protected static ?string $navigationIcon = 'heroicon-o-user-plus';
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 0;
 
     public static function getEloquentQuery(): Builder
     {

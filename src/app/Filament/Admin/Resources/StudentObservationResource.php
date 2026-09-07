@@ -17,7 +17,13 @@ class StudentObservationResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-face-smile';
 
-    protected static ?string $navigationGroup = 'Monitoring';
+    protected static ?string $navigationGroup = 'Murid';
+
+    protected static ?string $navigationLabel = 'Observasi Murid';
+
+    protected static ?string $modelLabel = 'Observasi Murid';
+
+    protected static ?string $pluralModelLabel = 'Observasi Murid';
 
     protected static ?string $recordTitleAttribute = 'student.name';
 

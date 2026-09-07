@@ -14,6 +14,20 @@ class SchoolStatsOverview extends StatsOverviewWidget
     {
         $schoolId = auth()->user()?->school_id;
 
+        $teacherActivitiesToday = Activity::query()
+            ->whereDate('activity_date', now())
+            ->whereHas('owner', fn ($ownerQuery) => $ownerQuery
+                ->role('teacher')
+                ->where('school_id', $schoolId))
+            ->count();
+
+        $studentActivitiesToday = Activity::query()
+            ->whereDate('activity_date', now())
+            ->whereHas('owner', fn ($ownerQuery) => $ownerQuery
+                ->role('student')
+                ->where('school_id', $schoolId))
+            ->count();
+
         return [
             Stat::make('Kelas Aktif', SchoolClass::query()
                 ->where('school_id', $schoolId)
@@ -40,20 +54,23 @@ class SchoolStatsOverview extends StatsOverviewWidget
                 })
                 ->count())
                 ->icon('heroicon-m-heart'),
-            Stat::make('Pending Approval', User::query()
+            Stat::make('Pending Guru', User::query()
                 ->where('school_id', $schoolId)
                 ->where('approval_status', 'pending')
-                ->whereHas('roles', fn ($query) => $query->whereIn('name', ['teacher', 'student']))
+                ->role('teacher')
                 ->count())
                 ->color('warning')
                 ->icon('heroicon-m-clock'),
-            Stat::make('Activity Hari Ini', Activity::query()
-                ->whereDate('activity_date', now())
-                ->where(function ($query) use ($schoolId) {
-                    $query->where('school_id', $schoolId)
-                        ->orWhereHas('owner', fn ($ownerQuery) => $ownerQuery->where('school_id', $schoolId));
-                })
+            Stat::make('Pending Murid', User::query()
+                ->where('school_id', $schoolId)
+                ->where('approval_status', 'pending')
+                ->role('student')
                 ->count())
+                ->color('warning')
+                ->icon('heroicon-m-clock'),
+            Stat::make('Activity Guru Hari Ini', $teacherActivitiesToday)
+                ->icon('heroicon-m-calendar-days'),
+            Stat::make('Activity Murid Hari Ini', $studentActivitiesToday)
                 ->icon('heroicon-m-calendar-days'),
         ];
     }

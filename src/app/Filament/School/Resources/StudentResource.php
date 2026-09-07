@@ -21,12 +21,12 @@ class StudentResource extends Resource
     use HandlesSchoolUserApproval;
 
     protected static ?string $model = User::class;
-    protected static ?string $navigationGroup = 'Pengguna';
-    protected static ?string $navigationLabel = 'Murid';
+    protected static ?string $navigationGroup = 'Murid';
+    protected static ?string $navigationLabel = 'Data Murid';
     protected static ?string $modelLabel = 'Murid';
     protected static ?string $pluralModelLabel = 'Murid';
     protected static ?string $navigationIcon = 'heroicon-o-users';
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 1;
 
     public static function getEloquentQuery(): Builder
     {

@@ -18,9 +18,15 @@ class PlatformStatsOverview extends BaseWidget
         $totalTeachers = User::role('teacher')->count();
         $totalStudents = User::role('student')->count();
         $totalParents = User::role('parent')->count();
-        $activitiesToday = Activity::whereDate('activity_date', today())
+        $teacherActivitiesToday = Activity::whereDate('activity_date', today())
             ->where('status', '!=', Activity::STATUS_CANCELLED)
+            ->whereHas('owner', fn ($query) => $query->role('teacher'))
             ->count();
+        $studentActivitiesToday = Activity::whereDate('activity_date', today())
+            ->where('status', '!=', Activity::STATUS_CANCELLED)
+            ->whereHas('owner', fn ($query) => $query->role('student'))
+            ->count();
+        $activitiesToday = $teacherActivitiesToday + $studentActivitiesToday;
         $completedToday = Activity::whereDate('activity_date', today())
             ->where('status', Activity::STATUS_COMPLETED)
             ->count();
@@ -31,6 +37,12 @@ class PlatformStatsOverview extends BaseWidget
             ->whereIn('checkout_analysis_source', ['gemini', 'fastapi', 'mock'])
             ->count();
         $latestAnalyses = BurnoutAnalysisSnapshot::where('created_at', '>=', now()->subDays(7))->count();
+        $teacherAnalyses = BurnoutAnalysisSnapshot::where('created_at', '>=', now()->subDays(7))
+            ->whereHas('user', fn ($query) => $query->role('teacher'))
+            ->count();
+        $studentAnalyses = BurnoutAnalysisSnapshot::where('created_at', '>=', now()->subDays(7))
+            ->whereHas('user', fn ($query) => $query->role('student'))
+            ->count();
         $redAnalyses = BurnoutAnalysisSnapshot::where('created_at', '>=', now()->subDays(7))
             ->where('category', 'merah')
             ->count();
@@ -48,16 +60,24 @@ class PlatformStatsOverview extends BaseWidget
                 ->icon('heroicon-o-academic-cap'),
             Stat::make('Orang Tua Terhubung', $totalParents)
                 ->icon('heroicon-o-heart'),
-            Stat::make('Activity Hari Ini', $activitiesToday)
-                ->description($completionRate . '% sudah check-out')
+            Stat::make('Activity Guru Hari Ini', $teacherActivitiesToday)
+                ->description('Dipisah dari activity murid')
+                ->icon('heroicon-o-calendar-days')
+                ->color('success'),
+            Stat::make('Activity Murid Hari Ini', $studentActivitiesToday)
+                ->description($completionRate . '% semua activity sudah check-out')
                 ->icon('heroicon-o-clipboard-document-check')
                 ->color($completionRate >= 70 ? 'success' : 'warning'),
             Stat::make('Analisa Jurnal Hari Ini', $journalReviewsToday)
                 ->description($aiReviewsToday . ' analisa otomatis')
                 ->icon('heroicon-o-sparkles')
                 ->color($aiReviewsToday > 0 ? 'success' : 'gray'),
-            Stat::make('Analisis Burnout (7 hari)', $latestAnalyses)
-                ->description($redAnalyses . ' status merah')
+            Stat::make('Analisis Guru (7 hari)', $teacherAnalyses)
+                ->description($redAnalyses . ' status merah total')
+                ->icon('heroicon-o-chart-bar-square')
+                ->color($redAnalyses > 0 ? 'danger' : 'success'),
+            Stat::make('Analisis Murid (7 hari)', $studentAnalyses)
+                ->description($latestAnalyses . ' analisis total')
                 ->icon('heroicon-o-chart-bar-square')
                 ->color($redAnalyses > 0 ? 'danger' : 'success'),
             Stat::make('Sesi Mindfulness (7 hari)', $sessionsThisWeek)

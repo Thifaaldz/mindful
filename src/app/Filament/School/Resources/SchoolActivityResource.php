@@ -23,6 +23,7 @@ class SchoolActivityResource extends Resource
     protected static ?string $pluralModelLabel = 'Activity';
     protected static ?string $navigationIcon = 'heroicon-o-calendar-days';
     protected static ?int $navigationSort = 1;
+    protected static bool $shouldRegisterNavigation = false;
 
     public static function getEloquentQuery(): Builder
     {

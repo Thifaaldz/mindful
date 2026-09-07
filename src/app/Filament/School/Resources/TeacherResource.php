@@ -20,8 +20,8 @@ class TeacherResource extends Resource
     use HandlesSchoolUserApproval;
 
     protected static ?string $model = User::class;
-    protected static ?string $navigationGroup = 'Pengguna';
-    protected static ?string $navigationLabel = 'Guru';
+    protected static ?string $navigationGroup = 'Guru';
+    protected static ?string $navigationLabel = 'Data Guru';
     protected static ?string $modelLabel = 'Guru';
     protected static ?string $pluralModelLabel = 'Guru';
     protected static ?string $navigationIcon = 'heroicon-o-user-group';

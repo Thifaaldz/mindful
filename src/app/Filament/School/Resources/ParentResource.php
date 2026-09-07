@@ -18,7 +18,7 @@ class ParentResource extends Resource
     use BelongsToSchoolPanel;
 
     protected static ?string $model = User::class;
-    protected static ?string $navigationGroup = 'Pengguna';
+    protected static ?string $navigationGroup = 'Orang Tua';
     protected static ?string $navigationLabel = 'Parent Management';
     protected static ?string $modelLabel = 'Orang Tua';
     protected static ?string $pluralModelLabel = 'Orang Tua';

@@ -20,6 +20,8 @@ class BurnoutAnalysisSnapshotResource extends Resource
 
     protected static ?string $navigationLabel = 'Snapshot Analisis';
 
+    protected static bool $shouldRegisterNavigation = false;
+
     public static function form(Form $form): Form
     {
         return $form->schema([
