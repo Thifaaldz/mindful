@@ -1,17 +1,17 @@
-name: mindfulledu
+name: mindfuledu
 
 services:
   php:
-    image: mindfulledu-php:latest
+    image: mindfuledu-php:latest
     build:
       context: ./php
       extra_hosts:
         - "pecl.php.net=156.59.92.126"
-    container_name: mindfulledu_php
+    container_name: mindfuledu_php
     volumes:
       - ./src:/var/www/html
     environment:
-      - PROJECT_NAME=mindfulledu
+      - PROJECT_NAME=mindfuledu
       - MINDFULEDU_ML_URL=http://ml:8000
     depends_on:
       - db
@@ -23,10 +23,10 @@ services:
       retries: 3
 
   nginx:
-    image: mindfulledu-nginx:latest
+    image: mindfuledu-nginx:latest
     build:
       context: ./nginx
-    container_name: mindfulledu_nginx
+    container_name: mindfuledu_nginx
     ports:
       - "443:443"
       - "80:80"
@@ -44,11 +44,11 @@ services:
 
   db:
     image: mariadb:10.11
-    container_name: mindfulledu_db
+    container_name: mindfuledu_db
     ports:
       - "13306:3306"
     environment:
-      MYSQL_DATABASE: mindfulledu
+      MYSQL_DATABASE: mindfuledu
       MYSQL_ROOT_PASSWORD: p455w0rd
     volumes:
       - ./db/conf.d:/etc/mysql/conf.d
@@ -60,10 +60,10 @@ services:
       retries: 5
 
   ml:
-    image: mindfulledu-ml:latest
+    image: mindfuledu-ml:latest
     build:
       context: ./ml-service
-    container_name: mindfulledu_ml
+    container_name: mindfuledu_ml
     env_file:
       - ./ml-service/.env
     ports:

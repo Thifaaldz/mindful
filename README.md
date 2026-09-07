@@ -127,7 +127,7 @@ APP_URL=https://mindfulapps.test
 DB_CONNECTION=mariadb
 DB_HOST=db
 DB_PORT=3306
-DB_DATABASE=mindfulledu
+DB_DATABASE=mindfuledu
 DB_USERNAME=root
 DB_PASSWORD=p455w0rd
 
@@ -174,10 +174,10 @@ docker compose ps
 Container normal:
 
 ```text
-mindfulledu_nginx
-mindfulledu_php
-mindfulledu_db
-mindfulledu_ml
+mindfuledu_nginx
+mindfuledu_php
+mindfuledu_db
+mindfuledu_ml
 ```
 
 Setup Laravel setelah pertama kali clone atau setelah ada update backend:
@@ -1209,10 +1209,10 @@ docker compose exec -T php php -l app/Http/Controllers/Api/ClassroomActivityCont
 
 | Service | Container | Port | Fungsi |
 | --- | --- | --- | --- |
-| `nginx` | `mindfulledu_nginx` | `80`, `443` | Web server Laravel |
-| `php` | `mindfulledu_php` | internal `9000` | PHP-FPM Laravel |
-| `db` | `mindfulledu_db` | `13306 -> 3306` | MariaDB |
-| `ml` | `mindfulledu_ml` | `18000 -> 8000` | FastAPI ML/Gemini |
+| `nginx` | `mindfuledu_nginx` | `80`, `443` | Web server Laravel |
+| `php` | `mindfuledu_php` | internal `9000` | PHP-FPM Laravel |
+| `db` | `mindfuledu_db` | `13306 -> 3306` | MariaDB |
+| `ml` | `mindfuledu_ml` | `18000 -> 8000` | FastAPI ML/Gemini |
 
 Command umum:
 
