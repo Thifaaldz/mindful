@@ -14,15 +14,15 @@ import 'package:flutter/foundation.dart';
 /// - macOS desktop: use `https://127.0.0.1/api`.
 const String kApiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'https://192.168.100.60/api',
+  defaultValue: 'https://10.90.25.146/api',
 );
 
-const _kBundledLanBaseUrl = 'https://192.168.100.60/api';
+const _kBundledLanBaseUrl = 'https://10.90.25.146/api';
 
 const String kApiFallbackUrls = String.fromEnvironment(
   'API_FALLBACK_URLS',
   defaultValue:
-      'https://192.168.100.60/api,https://10.0.2.2/api,https://127.0.0.1/api',
+      'https://10.90.25.146/api,https://10.0.2.2/api,https://127.0.0.1/api',
 );
 
 const _kConnectTimeout = Duration(seconds: 2);

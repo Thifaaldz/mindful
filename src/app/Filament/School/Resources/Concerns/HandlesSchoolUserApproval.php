@@ -3,9 +3,11 @@
 namespace App\Filament\School\Resources\Concerns;
 
 use App\Models\User;
+use App\Notifications\UserApprovedNotification;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Tables;
+use Throwable;
 
 trait HandlesSchoolUserApproval
 {
@@ -27,8 +29,15 @@ trait HandlesSchoolUserApproval
                     'rejection_reason' => null,
                 ])->save();
 
+                try {
+                    $record->notify(new UserApprovedNotification($record));
+                } catch (Throwable $exception) {
+                    report($exception);
+                }
+
                 Notification::make()
                     ->title('Akun berhasil di-approve')
+                    ->body('Email pemberitahuan approval dikirim jika konfigurasi email aktif.')
                     ->success()
                     ->send();
             });

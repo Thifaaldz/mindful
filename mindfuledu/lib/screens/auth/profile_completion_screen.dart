@@ -100,11 +100,14 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
     super.dispose();
   }
 
-  void _selectSchool(int? schoolId) {
+  void _selectSchool(int? schoolId, {String? schoolName}) {
     setState(() {
       _selectedSchoolId = schoolId;
+      _schoolController.text = schoolName ?? '';
       _selectedClassId = null;
-      _classesFuture = schoolId == null ? null : Api.publicSchoolClasses(schoolId);
+      _classesFuture = schoolId == null || _role != 'student'
+          ? null
+          : Api.publicSchoolClasses(schoolId);
     });
   }
 
@@ -119,26 +122,38 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
 
         return DropdownButtonFormField<int>(
           initialValue: hasSelected ? _selectedSchoolId : null,
-          decoration: const InputDecoration(
-            labelText: 'Sekolah',
+          decoration: InputDecoration(
+            labelText: switch (_role) {
+              'parent' => 'Sekolah anak',
+              'student' => 'Sekolah siswa',
+              _ => 'Sekolah',
+            },
             border: OutlineInputBorder(),
           ),
-          items: schools
-              .map((item) {
-                final school = item as Map<String, dynamic>;
-                final city = '${school['city'] ?? ''}'.trim();
-                final subtitle = city.isEmpty ? '' : ' - $city';
+          items: schools.map((item) {
+            final school = item as Map<String, dynamic>;
+            final city = '${school['city'] ?? ''}'.trim();
+            final subtitle = city.isEmpty ? '' : ' - $city';
 
-                return DropdownMenuItem<int>(
-                  value: school['id'] as int,
-                  child: Text('${school['name']}$subtitle'),
-                );
-              })
-              .toList(),
+            return DropdownMenuItem<int>(
+              value: school['id'] as int,
+              child: Text('${school['name']}$subtitle'),
+            );
+          }).toList(),
           onChanged: snapshot.connectionState == ConnectionState.waiting
               ? null
-              : _selectSchool,
-          validator: (value) => value == null ? 'Pilih sekolah terdaftar' : null,
+              : (value) {
+                  final selectedSchools = schools
+                      .cast<Map<String, dynamic>>()
+                      .where((school) => school['id'] == value)
+                      .toList();
+                  final schoolName = selectedSchools.isEmpty
+                      ? null
+                      : '${selectedSchools.first['name'] ?? ''}'.trim();
+                  _selectSchool(value, schoolName: schoolName);
+                },
+          validator: (value) =>
+              value == null ? 'Pilih sekolah terdaftar' : null,
         );
       },
     );
@@ -171,18 +186,16 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
             labelText: 'Kelas',
             border: OutlineInputBorder(),
           ),
-          items: classes
-              .map((item) {
-                final schoolClass = item as Map<String, dynamic>;
-                final grade = '${schoolClass['grade'] ?? ''}'.trim();
-                final subtitle = grade.isEmpty ? '' : ' - tingkat $grade';
+          items: classes.map((item) {
+            final schoolClass = item as Map<String, dynamic>;
+            final grade = '${schoolClass['grade'] ?? ''}'.trim();
+            final subtitle = grade.isEmpty ? '' : ' - tingkat $grade';
 
-                return DropdownMenuItem<int>(
-                  value: schoolClass['id'] as int,
-                  child: Text('${schoolClass['name']}$subtitle'),
-                );
-              })
-              .toList(),
+            return DropdownMenuItem<int>(
+              value: schoolClass['id'] as int,
+              child: Text('${schoolClass['name']}$subtitle'),
+            );
+          }).toList(),
           onChanged: snapshot.connectionState == ConnectionState.waiting
               ? null
               : (value) => setState(() => _selectedClassId = value),
@@ -233,20 +246,7 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
                       : null,
                 ),
                 const SizedBox(height: 16),
-                if (_role == 'teacher' || _role == 'student')
-                  _schoolDropdown()
-                else
-                  TextFormField(
-                    controller: _schoolController,
-                    decoration: const InputDecoration(
-                      labelText: 'Sekolah',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) =>
-                        (value == null || value.trim().isEmpty)
-                        ? 'Sekolah wajib diisi'
-                        : null,
-                  ),
+                _schoolDropdown(),
                 if (_role == 'student') ...[
                   const SizedBox(height: 16),
                   _studentClassDropdown(),

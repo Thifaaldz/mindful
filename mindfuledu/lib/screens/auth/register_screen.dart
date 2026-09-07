@@ -32,8 +32,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _googleLoading = false;
   bool _rememberDevice = true;
   String? _error;
+  String? _googleIdToken;
 
   AccountRole get _role => AccountRole.byId(widget.selectedRole);
+  bool get _isGoogleRegistration => _googleIdToken != null;
 
   @override
   void initState() {
@@ -43,26 +45,52 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    final session = context.read<Session>();
+
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      await context.read<Session>().register(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-        passwordConfirmation: _passwordConfirmController.text,
-        role: _role.id,
-        schoolId: _role.id == 'teacher' || _role.id == 'student'
-            ? _selectedSchoolId
-            : null,
-        school: _role.id == 'parent' ? _schoolController.text.trim() : null,
-        classId: _role.id == 'student' ? _selectedClassId : null,
-        studentVerificationCode: _role.id == 'parent'
-            ? _studentCodeController.text.trim()
-            : null,
-        rememberDevice: _rememberDevice,
-      );
+      final registrationMessage = _isGoogleRegistration
+          ? await session.registerWithGoogleIdToken(
+              idToken: _googleIdToken!,
+              email: _emailController.text.trim(),
+              password: _passwordController.text,
+              passwordConfirmation: _passwordConfirmController.text,
+              role: _role.id,
+              schoolId: _role.id == 'teacher' || _role.id == 'student'
+                  ? _selectedSchoolId
+                  : null,
+              school: _role.id == 'parent'
+                  ? _schoolController.text.trim()
+                  : null,
+              classId: _role.id == 'student' ? _selectedClassId : null,
+              studentVerificationCode: _role.id == 'parent'
+                  ? _studentCodeController.text.trim()
+                  : null,
+              rememberDevice: _rememberDevice,
+            )
+          : await session.register(
+              email: _emailController.text.trim(),
+              password: _passwordController.text,
+              passwordConfirmation: _passwordConfirmController.text,
+              role: _role.id,
+              schoolId: _role.id == 'teacher' || _role.id == 'student'
+                  ? _selectedSchoolId
+                  : null,
+              school: _role.id == 'parent'
+                  ? _schoolController.text.trim()
+                  : null,
+              classId: _role.id == 'student' ? _selectedClassId : null,
+              studentVerificationCode: _role.id == 'parent'
+                  ? _studentCodeController.text.trim()
+                  : null,
+              rememberDevice: _rememberDevice,
+            );
+      if (registrationMessage != null && mounted) {
+        await _showRegistrationDialog(registrationMessage);
+      }
       if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
     } on ApiException catch (e) {
       setState(() => _error = _formatApiError(e));
@@ -71,22 +99,51 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  Future<void> _showRegistrationDialog(String message) {
+    final waitingApproval = message.toLowerCase().contains('menunggu');
+
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Pendaftaran Berhasil'),
+        content: Text(
+          waitingApproval
+              ? 'Terima kasih sudah daftar. Tunggu approval Admin Sekolah.\n\nSetelah disetujui, Anda bisa login memakai email dan password yang dibuat saat registrasi.'
+              : 'Terima kasih sudah daftar.\n\n$message',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Mengerti'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _registerWithGoogle() async {
     setState(() {
       _googleLoading = true;
       _error = null;
     });
     try {
-      final idToken = await GoogleAuthService.signInAndGetIdToken();
-      if (idToken == null) return;
+      await GoogleAuthService.signOut();
+      final result = await GoogleAuthService.signInAndGetProfile();
+      if (result == null) return;
       if (!mounted) return;
 
-      await context.read<Session>().loginWithGoogleIdToken(
-        idToken,
-        role: _role.id,
-        rememberDevice: _rememberDevice,
+      setState(() {
+        _googleIdToken = result.idToken;
+        _emailController.text = result.email;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Akun Google ${result.email} dipilih. Lengkapi password dan data sekolah, lalu tekan daftar.',
+          ),
+        ),
       );
-      if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
     } on ApiException catch (e) {
       setState(() => _error = _formatApiError(e));
     } catch (e) {
@@ -106,12 +163,59 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  void _selectSchool(int? schoolId) {
+  void _selectSchool(int? schoolId, {String? schoolName}) {
     setState(() {
       _selectedSchoolId = schoolId;
+      _schoolController.text = schoolName ?? '';
       _selectedClassId = null;
-      _classesFuture = schoolId == null ? null : Api.publicSchoolClasses(schoolId);
+      _classesFuture = schoolId == null || _role.id != 'student'
+          ? null
+          : Api.publicSchoolClasses(schoolId);
     });
+  }
+
+  void _clearGoogleRegistration() {
+    setState(() {
+      _googleIdToken = null;
+      _emailController.clear();
+      _error = null;
+    });
+  }
+
+  Widget _googleRegisterButton() {
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: _role.primary,
+        side: BorderSide(color: _role.primary.withValues(alpha: 0.24)),
+      ),
+      onPressed: _googleLoading ? null : _registerWithGoogle,
+      icon: _googleLoading
+          ? const SizedBox(
+              height: 18,
+              width: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.g_mobiledata, size: 28),
+      label: Text(
+        _isGoogleRegistration ? 'Ganti akun Google' : 'Pilih akun Google',
+      ),
+    );
+  }
+
+  Widget _emailDivider() {
+    return Row(
+      children: [
+        const Expanded(child: Divider()),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            'atau daftar dengan email',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+        const Expanded(child: Divider()),
+      ],
+    );
   }
 
   Widget _schoolDropdown() {
@@ -119,29 +223,44 @@ class _RegisterScreenState extends State<RegisterScreen> {
       future: _schoolsFuture,
       builder: (context, snapshot) {
         final schools = snapshot.data ?? const [];
+        final hasSelected = schools.any(
+          (item) => (item as Map<String, dynamic>)['id'] == _selectedSchoolId,
+        );
 
         return DropdownButtonFormField<int>(
-          initialValue: _selectedSchoolId,
+          initialValue: hasSelected ? _selectedSchoolId : null,
           decoration: InputDecoration(
-            labelText: _role.id == 'student' ? 'Sekolah siswa' : 'Sekolah',
+            labelText: switch (_role.id) {
+              'parent' => 'Sekolah anak',
+              'student' => 'Sekolah siswa',
+              _ => 'Sekolah',
+            },
             border: const OutlineInputBorder(),
           ),
-          items: schools
-              .map((item) {
-                final school = item as Map<String, dynamic>;
-                final city = '${school['city'] ?? ''}'.trim();
-                final subtitle = city.isEmpty ? '' : ' - $city';
+          items: schools.map((item) {
+            final school = item as Map<String, dynamic>;
+            final city = '${school['city'] ?? ''}'.trim();
+            final subtitle = city.isEmpty ? '' : ' - $city';
 
-                return DropdownMenuItem<int>(
-                  value: school['id'] as int,
-                  child: Text('${school['name']}$subtitle'),
-                );
-              })
-              .toList(),
+            return DropdownMenuItem<int>(
+              value: school['id'] as int,
+              child: Text('${school['name']}$subtitle'),
+            );
+          }).toList(),
           onChanged: snapshot.connectionState == ConnectionState.waiting
               ? null
-              : _selectSchool,
-          validator: (value) => value == null ? 'Pilih sekolah terdaftar' : null,
+              : (value) {
+                  final selectedSchools = schools
+                      .cast<Map<String, dynamic>>()
+                      .where((school) => school['id'] == value)
+                      .toList();
+                  final schoolName = selectedSchools.isEmpty
+                      ? null
+                      : '${selectedSchools.first['name'] ?? ''}'.trim();
+                  _selectSchool(value, schoolName: schoolName);
+                },
+          validator: (value) =>
+              value == null ? 'Pilih sekolah terdaftar' : null,
         );
       },
     );
@@ -171,18 +290,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
             labelText: 'Kelas',
             border: OutlineInputBorder(),
           ),
-          items: classes
-              .map((item) {
-                final schoolClass = item as Map<String, dynamic>;
-                final grade = '${schoolClass['grade'] ?? ''}'.trim();
-                final subtitle = grade.isEmpty ? '' : ' - tingkat $grade';
+          items: classes.map((item) {
+            final schoolClass = item as Map<String, dynamic>;
+            final grade = '${schoolClass['grade'] ?? ''}'.trim();
+            final subtitle = grade.isEmpty ? '' : ' - tingkat $grade';
 
-                return DropdownMenuItem<int>(
-                  value: schoolClass['id'] as int,
-                  child: Text('${schoolClass['name']}$subtitle'),
-                );
-              })
-              .toList(),
+            return DropdownMenuItem<int>(
+              value: schoolClass['id'] as int,
+              child: Text('${schoolClass['name']}$subtitle'),
+            );
+          }).toList(),
           onChanged: snapshot.connectionState == ConnectionState.waiting
               ? null
               : (value) => setState(() => _selectedClassId = value),
@@ -234,11 +351,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 20),
+                _googleRegisterButton(),
+                const SizedBox(height: 12),
+                if (!_isGoogleRegistration) ...[
+                  _emailDivider(),
+                  const SizedBox(height: 12),
+                ],
                 TextFormField(
                   controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    border: OutlineInputBorder(),
+                  readOnly: _isGoogleRegistration,
+                  decoration: InputDecoration(
+                    labelText: _isGoogleRegistration ? 'Email Google' : 'Email',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _isGoogleRegistration
+                        ? Icon(Icons.verified, color: _role.primary)
+                        : null,
                   ),
                   keyboardType: TextInputType.emailAddress,
                   validator: (v) {
@@ -272,7 +399,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ? 'Konfirmasi tidak sesuai'
                       : null,
                 ),
-                if (_role.id == 'teacher' || _role.id == 'student') ...[
+                if (_isGoogleRegistration) ...[
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(foregroundColor: _role.primary),
+                    onPressed: _googleLoading ? null : _clearGoogleRegistration,
+                    icon: const Icon(Icons.swap_horiz),
+                    label: const Text('Ganti ke daftar email biasa'),
+                  ),
+                ],
+                if (_role.id == 'teacher' ||
+                    _role.id == 'student' ||
+                    _role.id == 'parent') ...[
                   const SizedBox(height: 16),
                   _schoolDropdown(),
                 ],
@@ -281,19 +419,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   _studentClassDropdown(),
                 ],
                 if (_role.id == 'parent') ...[
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _schoolController,
-                    decoration: const InputDecoration(
-                      labelText: 'Sekolah anak',
-                      border: OutlineInputBorder(),
-                    ),
-                    textCapitalization: TextCapitalization.words,
-                    validator: (value) =>
-                        (value == null || value.trim().isEmpty)
-                        ? 'Sekolah anak wajib diisi'
-                        : null,
-                  ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _studentCodeController,
@@ -332,25 +457,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           width: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : Text(_role.registerTitle),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _role.primary,
-                    side: BorderSide(
-                      color: _role.primary.withValues(alpha: 0.24),
-                    ),
-                  ),
-                  onPressed: _googleLoading ? null : _registerWithGoogle,
-                  icon: _googleLoading
-                      ? const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.g_mobiledata, size: 28),
-                  label: Text('${_role.registerTitle} dengan Google'),
+                      : Text(
+                          _isGoogleRegistration
+                              ? '${_role.registerTitle} dengan Google'
+                              : _role.registerTitle,
+                        ),
                 ),
               ],
             ),

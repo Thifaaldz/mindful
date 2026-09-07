@@ -40,7 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
         rememberDevice: _rememberDevice,
       );
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      await _handleApiException(e);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -62,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
         rememberDevice: _rememberDevice,
       );
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      await _handleApiException(e);
     } catch (e) {
       setState(() => _error = 'Login Google gagal: $e');
     } finally {
@@ -78,7 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await context.read<Session>().quickLogin(role: _selectedRole.id);
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      await _handleApiException(e);
     } finally {
       if (mounted) setState(() => _quickLoading = false);
     }
@@ -89,6 +89,32 @@ class _LoginScreenState extends State<LoginScreen> {
       _selectedRole = role;
       _error = null;
     });
+  }
+
+  Future<void> _handleApiException(ApiException error) async {
+    if (!mounted) return;
+
+    setState(() => _error = error.message);
+
+    final message = error.message.toLowerCase();
+    final needsClearDialog =
+        message.contains('menunggu approval') || message.contains('ditolak');
+
+    if (!needsClearDialog) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Akses Belum Aktif'),
+        content: Text(error.message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Mengerti'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

@@ -19,7 +19,7 @@ class ParentResource extends Resource
 
     protected static ?string $model = User::class;
     protected static ?string $navigationGroup = 'Pengguna';
-    protected static ?string $navigationLabel = 'Orang Tua';
+    protected static ?string $navigationLabel = 'Parent Management';
     protected static ?string $modelLabel = 'Orang Tua';
     protected static ?string $pluralModelLabel = 'Orang Tua';
     protected static ?string $navigationIcon = 'heroicon-o-heart';

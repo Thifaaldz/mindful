@@ -32,6 +32,14 @@ class SchoolStatsOverview extends StatsOverviewWidget
                 ->where('approval_status', 'approved')
                 ->count())
                 ->icon('heroicon-m-users'),
+            Stat::make('Parent Management', User::query()
+                ->role('parent')
+                ->where(function ($query) use ($schoolId) {
+                    $query->where('school_id', $schoolId)
+                        ->orWhereHas('parentChildren', fn ($childQuery) => $childQuery->where('school_id', $schoolId));
+                })
+                ->count())
+                ->icon('heroicon-m-heart'),
             Stat::make('Pending Approval', User::query()
                 ->where('school_id', $schoolId)
                 ->where('approval_status', 'pending')

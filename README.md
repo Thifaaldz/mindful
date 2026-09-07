@@ -278,8 +278,36 @@ curl -I https://mindfulapps.pkmueu.online/download/android
 `parent`:
 
 - Login melalui akses orang tua.
-- Menautkan anak memakai kode verifikasi siswa dan nama sekolah.
+- Menautkan anak memakai kode verifikasi siswa dan pilihan sekolah anak.
 - Melihat activity, check-in, check-out, analisis, dan rekomendasi anak.
+
+Alur monitoring parent saat ini:
+
+```text
+Login parent
+↓
+Buka tab Anak
+↓
+Pilih/tambahkan siswa yang terhubung melalui kode verifikasi
+↓
+Pilih tanggal monitoring
+↓
+Lihat activity siswa pada tanggal tersebut
+↓
+Lihat mood check-in siswa
+↓
+Lihat mood check-out siswa
+↓
+Lihat analisis burnout harian siswa
+↓
+Lihat rekomendasi pendampingan untuk orang tua
+```
+
+Catatan implementasi saat ini:
+
+- Semua anak yang sudah terhubung ditampilkan sebagai card pada tab Anak.
+- Setiap card anak menampilkan status analisis, rekomendasi pendampingan, dan daftar activity pada tanggal terpilih.
+- Screen detail per siswa dapat dipisahkan nanti jika parent memiliki banyak anak atau tampilan card mulai terlalu panjang.
 
 ## Akun Demo
 
@@ -991,6 +1019,48 @@ Link child body:
   "school": "SDN Harmoni"
 }
 ```
+
+Alur data parent dashboard:
+
+```text
+Parent login
+↓
+GET /parent/dashboard?date=YYYY-MM-DD
+↓
+Backend mengambil semua siswa yang terhubung ke parent
+↓
+Backend mengambil activity siswa sesuai tanggal
+↓
+Backend menjalankan/mengambil analisis burnout harian siswa
+↓
+Mobile menampilkan card anak berisi activity, mood, analisis, dan rekomendasi
+```
+
+Data utama yang dikirim untuk setiap anak:
+
+| Field | Fungsi |
+| --- | --- |
+| `student` | Identitas siswa, sekolah, dan kelas |
+| `analysis` | Hasil analisis burnout harian siswa |
+| `analysis.category` | Status akhir analisis, misalnya hijau/kuning/merah |
+| `analysis.recommendation_summary` | Rekomendasi pendampingan untuk orang tua |
+| `activities` | Daftar activity siswa pada tanggal yang dipilih |
+| `activities[].checkin_mood` | Mood siswa saat check-in |
+| `activities[].checkin_intensity` | Intensitas mood saat check-in |
+| `activities[].checkin_trigger` | Alasan/pemicu saat check-in |
+| `activities[].checkout_mood` | Mood siswa saat check-out |
+| `activities[].checkout_fact` | Cerita/fakta kegiatan dari jurnal siswa |
+| `activities[].checkout_feeling` | Perasaan siswa setelah kegiatan |
+| `activities[].checkout_pattern` | Pola yang disadari siswa |
+| `activities[].checkout_plan` | Rencana siswa berikutnya |
+| `activities[].checkout_suggestion` | Saran pendampingan dari review jurnal |
+| `activities[].teacher` | Guru terkait jika activity berasal dari kelas |
+
+Catatan UI:
+
+- Parent tidak membuat activity dan tidak mengubah jurnal anak.
+- Parent hanya melihat data monitoring anak yang sudah ditautkan.
+- Sekolah anak pada register parent dan tambah anak dipilih dari daftar sekolah, bukan diketik manual.
 
 ## FastAPI Endpoints
 

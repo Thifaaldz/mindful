@@ -68,19 +68,10 @@ class AuthController extends Controller
             return [$user, $student];
         });
 
-        if (in_array($role, ['teacher', 'student'], true) && $user->approval_status === 'pending') {
-            return response()->json([
-                'message' => 'Pendaftaran berhasil. Akun menunggu approval Admin Sekolah.',
-                'user' => $this->formatUser($user),
-            ], 202);
-        }
-
-        $token = $this->issueLoginToken($user, $request, $role);
-
         return response()->json([
+            'message' => $this->registrationMessage($user),
             'user' => $this->formatUser($user),
-            'token' => $token,
-        ], 201);
+        ], $user->approval_status === 'pending' ? 202 : 201);
     }
 
     public function login(Request $request)
@@ -140,16 +131,15 @@ class AuthController extends Controller
         }
 
         $emailVerified = filter_var($payload['email_verified'] ?? false, FILTER_VALIDATE_BOOL);
-        $user = User::firstOrNew(['email' => $email]);
+        $user = User::where('email', $email)->first();
 
-        if (! $user->exists) {
-            $user->name = $payload['name']
-                ?? Str::of($email)->before('@')->replace('.', ' ')->title()->toString();
-            $user->password = Hash::make(Str::random(40));
-            $user->profile_completed = false;
-        } else {
-            $this->ensureRoleAccess($user, $data['role']);
+        if (! $user) {
+            return response()->json([
+                'message' => 'Akun Google belum terdaftar. Silakan daftar terlebih dahulu.',
+            ], 422);
         }
+
+        $this->ensureRoleAccess($user, $data['role']);
 
         $user->google_id = $payload['sub'] ?? $user->google_id;
         $user->google_avatar_url = $payload['picture'] ?? $user->google_avatar_url;
@@ -169,6 +159,91 @@ class AuthController extends Controller
             'user' => $this->formatUser($user),
             'token' => $token,
         ]);
+    }
+
+    public function registerGoogle(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'id_token' => ['required', 'string'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'role' => ['required', Rule::in(['teacher', 'student', 'parent'])],
+            'school_id' => ['nullable', 'integer', 'exists:schools,id', 'required_if:role,teacher,student'],
+            'school' => ['nullable', 'string', 'max:255', 'required_if:role,parent'],
+            'class_id' => ['nullable', 'integer', 'exists:classes,id'],
+            'class_name' => ['nullable', 'string', 'max:80'],
+            'student_verification_code' => ['nullable', 'string', 'max:24', 'required_if:role,parent'],
+            ...$this->deviceValidationRules(),
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => 'Validasi gagal', 'errors' => $validator->errors()], 422);
+        }
+
+        $data = $validator->validated();
+        $payload = $this->verifyGoogleIdToken($data['id_token']);
+
+        if (! $payload) {
+            return response()->json(['message' => 'Register Google tidak valid'], 401);
+        }
+
+        $email = $payload['email'] ?? null;
+
+        if (! $email) {
+            return response()->json(['message' => 'Akun Google tidak memiliki email'], 422);
+        }
+
+        if (isset($data['email']) && strtolower($data['email']) !== strtolower($email)) {
+            return response()->json([
+                'message' => 'Email yang diisi harus sama dengan email akun Google.',
+            ], 422);
+        }
+
+        if (User::where('email', $email)->exists()) {
+            return response()->json([
+                'message' => 'Email ini sudah terdaftar. Silakan login menggunakan Google atau email dan password.',
+            ], 422);
+        }
+
+        $role = $data['role'];
+        $emailVerified = filter_var($payload['email_verified'] ?? false, FILTER_VALIDATE_BOOL);
+
+        [$user, $student] = DB::transaction(function () use ($data, $role, $payload, $email, $emailVerified) {
+            $student = $role === 'parent'
+                ? $this->studentForParentCode($data['student_verification_code'] ?? null, $data['school'] ?? null)
+                : null;
+
+            $user = User::create([
+                'name' => $payload['name']
+                    ?? Str::of($email)->before('@')->replace('.', ' ')->title()->toString(),
+                'email' => $email,
+                'email_verified_at' => $emailVerified ? now() : null,
+                'password' => Hash::make($data['password']),
+                'google_id' => $payload['sub'] ?? null,
+                'google_avatar_url' => $payload['picture'] ?? null,
+                'school_id' => $data['school_id'] ?? null,
+                'school' => $this->schoolNameFor($data),
+                'class_id' => $role === 'student' ? $this->resolveStudentClassId($data) : null,
+                'student_verification_code' => $role === 'student' ? $this->newStudentVerificationCode() : null,
+                'approval_status' => in_array($role, ['teacher', 'student'], true) ? 'pending' : 'approved',
+                'profile_completed' => true,
+            ]);
+
+            $user->assignRole($role);
+
+            if ($student) {
+                $user->parentChildren()->syncWithoutDetaching([
+                    $student->id => ['verified_at' => now()],
+                ]);
+            }
+
+            return [$user, $student];
+        });
+
+        return response()->json([
+            'message' => $this->registrationMessage($user),
+            'user' => $this->formatUser($user),
+        ], $user->approval_status === 'pending' ? 202 : 201);
     }
 
     public function logout(Request $request)
@@ -490,6 +565,15 @@ class AuthController extends Controller
 
         abort_if($status === 'pending', 403, 'Akun Anda masih menunggu approval Admin Sekolah.');
         abort_if($status === 'rejected', 403, 'Pendaftaran akun Anda ditolak oleh Admin Sekolah.');
+    }
+
+    private function registrationMessage(User $user): string
+    {
+        if (($user->approval_status ?? 'approved') === 'pending') {
+            return 'Pendaftaran berhasil. Akun menunggu approval Admin Sekolah.';
+        }
+
+        return 'Pendaftaran berhasil. Silakan login menggunakan email dan password yang dibuat saat registrasi.';
     }
 
     private function avatarUrl(User $user): ?string

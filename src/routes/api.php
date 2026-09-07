@@ -16,6 +16,7 @@ Route::get('/public/schools', [PublicSchoolController::class, 'schools']);
 Route::get('/public/schools/{school}/classes', [PublicSchoolController::class, 'classes']);
 
 Route::post('/register', [AuthController::class, 'register']);
+Route::post('/register/google', [AuthController::class, 'registerGoogle']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/auth/google', [AuthController::class, 'google']);
 

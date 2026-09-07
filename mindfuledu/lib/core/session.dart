@@ -91,7 +91,7 @@ class Session extends ChangeNotifier {
     );
   }
 
-  Future<void> register({
+  Future<String?> register({
     required String email,
     required String password,
     required String passwordConfirmation,
@@ -123,12 +123,50 @@ class Session extends ChangeNotifier {
     );
     final data = response.data as Map<String, dynamic>;
     if (!data.containsKey('token')) {
-      throw ApiException(
-        data['message'] as String? ??
-            'Pendaftaran berhasil dan menunggu approval Admin Sekolah.',
-      );
+      return data['message'] as String? ??
+          'Pendaftaran berhasil dan menunggu approval Admin Sekolah.';
     }
     await _persist(data, rememberDevice: rememberDevice);
+    return null;
+  }
+
+  Future<String?> registerWithGoogleIdToken({
+    required String idToken,
+    required String email,
+    required String password,
+    required String passwordConfirmation,
+    required String role,
+    int? schoolId,
+    String? school,
+    int? classId,
+    String? className,
+    String? studentVerificationCode,
+    bool rememberDevice = false,
+  }) async {
+    final device = await _devicePayload();
+    final response = await ApiClient.instance.post(
+      '/register/google',
+      data: {
+        'id_token': idToken,
+        'email': email,
+        'password': password,
+        'password_confirmation': passwordConfirmation,
+        'role': role,
+        'school_id': schoolId,
+        'school': school,
+        'class_id': classId,
+        'class_name': className,
+        'student_verification_code': studentVerificationCode,
+        ...device,
+      },
+    );
+    final data = response.data as Map<String, dynamic>;
+    if (!data.containsKey('token')) {
+      return data['message'] as String? ??
+          'Pendaftaran berhasil dan menunggu approval Admin Sekolah.';
+    }
+    await _persist(data, rememberDevice: rememberDevice);
+    return null;
   }
 
   Future<void> loginWithGoogleIdToken(

@@ -311,8 +311,16 @@ class _LinkChildSheet extends StatefulWidget {
 class _LinkChildSheetState extends State<_LinkChildSheet> {
   final _schoolController = TextEditingController();
   final _codeController = TextEditingController();
+  late Future<List<dynamic>> _schoolsFuture;
+  int? _selectedSchoolId;
   bool _saving = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _schoolsFuture = Api.publicSchools();
+  }
 
   @override
   void dispose() {
@@ -346,6 +354,56 @@ class _LinkChildSheetState extends State<_LinkChildSheet> {
     }
   }
 
+  void _selectSchool(int? schoolId, String? schoolName) {
+    setState(() {
+      _selectedSchoolId = schoolId;
+      _schoolController.text = schoolName ?? '';
+      _error = null;
+    });
+  }
+
+  Widget _schoolDropdown() {
+    return FutureBuilder<List<dynamic>>(
+      future: _schoolsFuture,
+      builder: (context, snapshot) {
+        final schools = snapshot.data ?? const [];
+        final hasSelected = schools.any(
+          (item) => (item as Map<String, dynamic>)['id'] == _selectedSchoolId,
+        );
+
+        return DropdownButtonFormField<int>(
+          initialValue: hasSelected ? _selectedSchoolId : null,
+          decoration: const InputDecoration(
+            labelText: 'Sekolah anak',
+            border: OutlineInputBorder(),
+          ),
+          items: schools.map((item) {
+            final school = item as Map<String, dynamic>;
+            final city = '${school['city'] ?? ''}'.trim();
+            final subtitle = city.isEmpty ? '' : ' - $city';
+
+            return DropdownMenuItem<int>(
+              value: school['id'] as int,
+              child: Text('${school['name']}$subtitle'),
+            );
+          }).toList(),
+          onChanged: snapshot.connectionState == ConnectionState.waiting
+              ? null
+              : (value) {
+                  final selectedSchools = schools
+                      .cast<Map<String, dynamic>>()
+                      .where((school) => school['id'] == value)
+                      .toList();
+                  final schoolName = selectedSchools.isEmpty
+                      ? null
+                      : '${selectedSchools.first['name'] ?? ''}'.trim();
+                  _selectSchool(value, schoolName);
+                },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -361,13 +419,7 @@ class _LinkChildSheetState extends State<_LinkChildSheet> {
         children: [
           Text('Tambah Anak', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 14),
-          TextField(
-            controller: _schoolController,
-            decoration: const InputDecoration(
-              labelText: 'Sekolah anak',
-              border: OutlineInputBorder(),
-            ),
-          ),
+          _schoolDropdown(),
           const SizedBox(height: 12),
           TextField(
             controller: _codeController,

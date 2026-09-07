@@ -9,6 +9,18 @@ const String kGoogleServerClientId = String.fromEnvironment(
       '772190179768-lc0qvgp76q531djrnb2n7q93cttm23v9.apps.googleusercontent.com',
 );
 
+class GoogleSignInResult {
+  const GoogleSignInResult({
+    required this.idToken,
+    required this.email,
+    this.displayName,
+  });
+
+  final String idToken;
+  final String email;
+  final String? displayName;
+}
+
 class GoogleAuthService {
   GoogleAuthService._();
 
@@ -19,7 +31,7 @@ class GoogleAuthService {
         : kGoogleServerClientId,
   );
 
-  static Future<String?> signInAndGetIdToken() async {
+  static Future<GoogleSignInResult?> signInAndGetProfile() async {
     final GoogleSignInAccount? account;
     try {
       account = await _googleSignIn.signIn();
@@ -47,7 +59,20 @@ class GoogleAuthService {
       );
     }
 
-    return idToken;
+    return GoogleSignInResult(
+      idToken: idToken,
+      email: account.email,
+      displayName: account.displayName,
+    );
+  }
+
+  static Future<String?> signInAndGetIdToken() async {
+    final result = await signInAndGetProfile();
+    if (result == null) {
+      return null;
+    }
+
+    return result.idToken;
   }
 
   static Future<void> signOut() => _googleSignIn.signOut();
