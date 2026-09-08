@@ -357,7 +357,10 @@ class _TodayScaleCard extends StatelessWidget {
     final hasScore = today['score'] != null;
     final category = '${today['category'] ?? 'belum cukup'}';
     final color = _categoryColor(category);
-    final recommendation = _jsonMap(today['recommendation']);
+    final recommendation = _latestActivityRecommendation(
+      today,
+      recommendationKey: 'recommendation',
+    );
     final headline = '${recommendation['headline'] ?? 'Belum ada rekomendasi'}';
     final action = '${recommendation['action'] ?? ''}';
     final practice = '${recommendation['practice'] ?? ''}';
@@ -1107,7 +1110,7 @@ class _RecommendationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final recommendation = _jsonMap(snapshot['recommendation_summary']);
+    final recommendation = _latestActivityRecommendation(snapshot);
     final factors = (recommendation['dominant_factors'] as List? ?? [])
         .map((item) => _factorLabel('$item'))
         .toList();
@@ -1228,7 +1231,7 @@ class _AnalysisHistoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final category = '${snapshot['category'] ?? 'belum cukup'}';
-    final recommendation = _jsonMap(snapshot['recommendation_summary']);
+    final recommendation = _latestActivityRecommendation(snapshot);
     final title = '${recommendation['practice_title'] ?? 'Rekomendasi'}';
     final period = '${snapshot['period_type'] ?? 'daily'}';
     final score = snapshot['final_burnout_risk_score'];
@@ -1725,6 +1728,54 @@ List<Map<String, dynamic>> _journalReviews(Map<String, dynamic>? snapshot) {
   if (direct.isNotEmpty) return direct;
 
   return _listOfMaps(_jsonMap(snapshot['payload'])['journal_reviews']);
+}
+
+Map<String, dynamic> _latestActivityRecommendation(
+  Map<String, dynamic>? snapshot, {
+  String recommendationKey = 'recommendation_summary',
+}) {
+  final recommendation = _jsonMap(snapshot?[recommendationKey]);
+  final reviews = _journalReviews(snapshot);
+  if (reviews.isEmpty) return recommendation;
+
+  final sortedReviews = [...reviews]
+    ..sort((a, b) => _reviewTimestamp(b).compareTo(_reviewTimestamp(a)));
+  final latestReview = sortedReviews.first;
+  final tactic = _jsonMap(latestReview['recommended_tactic']);
+  if (tactic.isEmpty) return recommendation;
+
+  final title = '${tactic['title'] ?? recommendation['practice_title'] ?? ''}'
+      .trim();
+  final activityTitle = '${latestReview['title'] ?? 'activity terakhir'}'
+      .trim();
+  final description =
+      '${tactic['description'] ?? tactic['practice'] ?? recommendation['practice'] ?? ''}'
+          .trim();
+
+  return {
+    ...recommendation,
+    'headline': 'Rekomendasi dari activity terakhir',
+    'action': title.isEmpty
+        ? 'Berdasarkan activity terakhir "$activityTitle", kami menyarankan teknik mindfulness yang paling sesuai.'
+        : 'Berdasarkan activity terakhir "$activityTitle", kami menyarankan $title sebagai teknik yang paling sesuai.',
+    'practice_code':
+        tactic['code'] ?? tactic['category'] ?? recommendation['practice_code'],
+    'practice_title': title.isEmpty ? recommendation['practice_title'] : title,
+    'practice': description.isEmpty ? recommendation['practice'] : description,
+    'recommended_movement':
+        tactic['recommended_movement'] ??
+        recommendation['recommended_movement'],
+    'why_this_tactic':
+        tactic['why_this_tactic'] ?? recommendation['why_this_tactic'],
+    'tactic': tactic,
+  };
+}
+
+int _reviewTimestamp(Map<String, dynamic> review) {
+  final parsed = DateTime.tryParse(
+    '${review['checked_out_at'] ?? review['activity_date'] ?? ''}',
+  );
+  return parsed?.millisecondsSinceEpoch ?? 0;
 }
 
 List<Map<String, dynamic>> _activityBreakdown(Map<String, dynamic>? snapshot) {

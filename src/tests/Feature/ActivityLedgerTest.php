@@ -6,6 +6,7 @@ use App\Models\MindfulTactic;
 use App\Models\SchoolClass;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Role;
@@ -539,24 +540,29 @@ test('manual burnout analysis stores fastapi recommendation when ml service is a
         'plan' => 'Tetap beri jeda sebelum aktivitas berikutnya.',
     ])->assertOk();
 
-    $this->postJson('/api/burnout-analyses', [
+    $response = $this->postJson('/api/burnout-analyses', [
         'period_type' => 'daily',
         'date' => '2026-08-27',
     ])
         ->assertCreated()
         ->assertJsonPath('model_version', 'fastapi-rule-mbsr-v2.3')
-        ->assertJsonPath('recommendation_summary.headline', 'Perlu jeda pemulihan dari FastAPI')
+        ->assertJsonPath('recommendation_summary.headline', 'Rekomendasi dari activity terakhir')
         ->assertJsonPath('recommendation_summary.practice_code', 'mindful_breathing')
-        ->assertJsonPath('recommendation_summary.source', 'gemini')
+        ->assertJsonPath('recommendation_summary.source', 'mock')
         ->assertJsonPath('recommendation_summary.tactic.category', 'mindful_breathing')
         ->assertJsonPath('recommendation_summary.tactic.title', 'Mindful Breathing')
+        ->assertJsonPath('recommendation_summary.latest_activity_review.title', 'Kelas pagi')
         ->assertJsonPath('payload.journal_reviews.0.recommended_tactic.code', 'mindful_breathing')
         ->assertJsonPath('payload.ml_service_used', true)
-        ->assertJsonPath('payload.recommendation_source', 'gemini');
+        ->assertJsonPath('payload.recommendation_source', 'mock');
+
+    expect($response->json('recommendation_summary.action'))
+        ->toContain('Kelas pagi')
+        ->toContain('Mindful Breathing');
 
     $this->getJson('/api/burnout-analyses')
         ->assertOk()
-        ->assertJsonPath('data.0.recommendation_summary.source', 'gemini')
+        ->assertJsonPath('data.0.recommendation_summary.source', 'mock')
         ->assertJsonPath('data.0.recommendation_summary.tactic.title', 'Mindful Breathing');
 
     Http::assertSent(fn ($request) => $request->url() === 'http://ml:8000/score/burnout'
@@ -572,6 +578,74 @@ test('manual burnout analysis stores fastapi recommendation when ml service is a
     Http::assertSent(fn ($request) => $request->url() === 'http://ml:8000/analyze/journal'
         && $request['fact'] === 'Kelas pagi selesai sesuai rencana.'
         && $request['feeling'] === 'Saya merasa cukup stabil.');
+});
+
+test('manual analysis uses latest activity tactic for the primary recommendation', function () {
+    config(['services.mindful_ml.url' => null]);
+
+    Role::create(['name' => 'teacher']);
+    $user = User::factory()->create();
+    $user->assignRole('teacher');
+    Sanctum::actingAs($user);
+
+    Carbon::setTestNow(Carbon::parse('2026-08-27 08:00:00'));
+    $firstActivityId = $this->postJson('/api/activities', [
+        'title' => 'Presentasi kelas',
+        'activity_date' => '2026-08-27',
+        'start_time' => '08:00',
+        'end_time' => '09:00',
+        'category' => 'mengajar',
+    ])->assertCreated()->json('activity.id');
+
+    $this->postJson("/api/activities/{$firstActivityId}/check-in", [
+        'mood' => 'cemas',
+        'intensity' => 7,
+    ])->assertOk();
+
+    Carbon::setTestNow(Carbon::parse('2026-08-27 09:00:00'));
+    $this->postJson("/api/activities/{$firstActivityId}/check-out", [
+        'mood' => 'cemas',
+        'fact' => 'Presentasi berjalan padat dan saya merasa cemas.',
+        'feeling' => 'Saya cemas karena banyak pertanyaan.',
+    ])->assertOk();
+
+    Carbon::setTestNow(Carbon::parse('2026-08-27 10:00:00'));
+    $latestActivityId = $this->postJson('/api/activities', [
+        'title' => 'Diskusi refleksi',
+        'activity_date' => '2026-08-27',
+        'start_time' => '10:00',
+        'end_time' => '11:00',
+        'category' => 'mengajar',
+    ])->assertCreated()->json('activity.id');
+
+    $this->postJson("/api/activities/{$latestActivityId}/check-in", [
+        'mood' => 'tenang',
+        'intensity' => 4,
+    ])->assertOk();
+
+    Carbon::setTestNow(Carbon::parse('2026-08-27 11:00:00'));
+    $this->postJson("/api/activities/{$latestActivityId}/check-out", [
+        'mood' => 'senang',
+        'fact' => 'Diskusi berjalan lancar dan saya senang dengan respons siswa.',
+        'feeling' => 'Saya senang dan lebih ringan.',
+    ])->assertOk();
+    Carbon::setTestNow();
+
+    $response = $this->postJson('/api/burnout-analyses', [
+        'period_type' => 'daily',
+        'date' => '2026-08-27',
+    ])
+        ->assertCreated()
+        ->assertJsonPath('recommendation_summary.headline', 'Rekomendasi dari activity terakhir')
+        ->assertJsonPath('recommendation_summary.practice_code', 'informal_mindfulness')
+        ->assertJsonPath('recommendation_summary.practice_title', 'Informal Mindfulness')
+        ->assertJsonPath('recommendation_summary.latest_activity_review.title', 'Diskusi refleksi')
+        ->assertJsonPath('payload.journal_reviews.0.title', 'Diskusi refleksi')
+        ->assertJsonPath('payload.journal_reviews.0.recommended_tactic.code', 'informal_mindfulness');
+
+    expect($response->json('recommendation_summary.action'))
+        ->toContain('activity terakhir "Diskusi refleksi"')
+        ->toContain('Informal Mindfulness');
 });
 
 test('manual burnout analysis reuses cached ai result when period data is unchanged', function () {

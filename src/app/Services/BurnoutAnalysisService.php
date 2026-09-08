@@ -858,7 +858,7 @@ class BurnoutAnalysisService
     private function journalReviews(Collection $journalRows, array $tacticCatalog): array
     {
         return $journalRows
-            ->sortByDesc(fn (Activity $activity) => $activity->checkout_at)
+            ->sortByDesc(fn (Activity $activity) => $this->activityReviewTimestamp($activity))
             ->map(function (Activity $activity) use ($tacticCatalog) {
                 $recommendedTactic = $this->recommendedTacticForJournalActivity($activity, $tacticCatalog);
                 $score = $this->activityRiskScore($activity);
@@ -885,6 +885,20 @@ class BurnoutAnalysisService
             })
             ->values()
             ->all();
+    }
+
+    private function latestJournalActivity(Collection $journalRows): ?Activity
+    {
+        return $journalRows
+            ->sortByDesc(fn (Activity $activity) => $this->activityReviewTimestamp($activity))
+            ->first();
+    }
+
+    private function activityReviewTimestamp(Activity $activity): int
+    {
+        $date = $activity->checkout_at ?? $activity->updated_at ?? $activity->created_at;
+
+        return $date instanceof Carbon ? $date->getTimestamp() : 0;
     }
 
     public function recommendedTacticForJournalActivity(Activity $activity, ?array $tacticCatalog = null): array
@@ -1181,9 +1195,7 @@ class BurnoutAnalysisService
 
     private function alignRecommendationWithJournalReview(array $recommendation, Collection $journalRows, array $tacticCatalog): array
     {
-        $activity = $journalRows
-            ->sortByDesc(fn (Activity $activity) => $activity->checkout_at)
-            ->first();
+        $activity = $this->latestJournalActivity($journalRows);
 
         if (! $activity) {
             return $recommendation;
@@ -1194,12 +1206,34 @@ class BurnoutAnalysisService
             return $recommendation;
         }
 
+        $activityScore = $this->activityRiskScore($activity);
+        $activityTitle = trim((string) $activity->title) ?: 'activity terakhir';
+        $tacticTitle = trim((string) ($tactic['title'] ?? 'teknik mindfulness')) ?: 'teknik mindfulness';
+
+        $recommendation['headline'] = 'Rekomendasi dari activity terakhir';
+        $recommendation['action'] = "Berdasarkan activity terakhir \"{$activityTitle}\", kami menyarankan {$tacticTitle} sebagai teknik yang paling sesuai.";
         $recommendation['practice_code'] = $tactic['code'];
         $recommendation['practice_title'] = $tactic['title'];
         $recommendation['practice'] = $tactic['description'];
         $recommendation['recommended_movement'] = $tactic['recommended_movement'];
         $recommendation['why_this_tactic'] = $tactic['why_this_tactic'];
         $recommendation['tactic'] = $tactic;
+        $recommendation['source'] = $tactic['source'] ?? ($recommendation['source'] ?? 'activity-journal');
+        $recommendation['analysis_review'] = 'Teknik utama diambil dari jurnal activity terakhir agar rekomendasi pada kesimpulan dan tombol latihan tetap sama.';
+        $recommendation['risk_reduction_steps'] = [
+            "Buka {$tacticTitle} dari rekomendasi activity terakhir.",
+            'Ikuti panduan step-by-step sampai selesai.',
+            'Catat perubahan kondisi setelah latihan bila diperlukan.',
+        ];
+        $recommendation['latest_activity_review'] = [
+            'activity_id' => $activity->id,
+            'title' => $activity->title,
+            'activity_date' => $activity->activity_date?->toDateString(),
+            'checked_out_at' => $activity->checkout_at?->toIso8601String(),
+            'score' => round($activityScore, 2),
+            'condition' => $this->category($activityScore),
+            'recommended_tactic' => $tactic,
+        ];
         $recommendation['codes'] = array_values(array_unique([
             $tactic['code'],
             ...($recommendation['codes'] ?? []),
