@@ -117,6 +117,30 @@ class UserSeeder extends Seeder
                 'classes' => ['5B'],
             ],
             [
+                'email' => 'guru.dina@mindfuledu.test',
+                'name' => 'Bu Dina',
+                'school' => 'SDN Contoh 1',
+                'classes' => ['5A'],
+            ],
+            [
+                'email' => 'guru.rizal@mindfuledu.test',
+                'name' => 'Pak Rizal',
+                'school' => 'SDN Contoh 1',
+                'classes' => ['5B'],
+            ],
+            [
+                'email' => 'guru.maya@mindfuledu.test',
+                'name' => 'Bu Maya',
+                'school' => 'SDN Contoh 1',
+                'classes' => ['5A'],
+            ],
+            [
+                'email' => 'guru.andi@mindfuledu.test',
+                'name' => 'Pak Andi',
+                'school' => 'SDN Contoh 1',
+                'classes' => ['5B'],
+            ],
+            [
                 'email' => 'guru.rani@mindfuledu.test',
                 'name' => 'Bu Rani',
                 'school' => 'SDN Contoh 2',
@@ -171,23 +195,34 @@ class UserSeeder extends Seeder
             $student->assignRole('student');
         }
 
-        $parent = User::updateOrCreate(
-            ['email' => 'parent@mindfuledu.test'],
-            [
-                'name' => 'Orang Tua Ani',
-                'password' => Hash::make('password'),
-                'school_id' => $schools['SDN Contoh 1']->id,
-                'school' => 'SDN Contoh 1',
-                'approval_status' => 'approved',
-                'profile_completed' => true,
-            ]
-        );
-        $parent->assignRole('parent');
-        $ani = User::where('email', 'siswa@mindfuledu.test')->first();
-        if ($ani) {
-            $parent->parentChildren()->syncWithoutDetaching([
-                $ani->id => ['verified_at' => now()],
-            ]);
+        $parents = [
+            ['email' => 'parent@mindfuledu.test', 'name' => 'Orang Tua Ani', 'student_email' => 'siswa@mindfuledu.test'],
+            ['email' => 'parent.budi@mindfuledu.test', 'name' => 'Orang Tua Budi', 'student_email' => 'budi@mindfuledu.test'],
+            ['email' => 'parent.citra@mindfuledu.test', 'name' => 'Orang Tua Citra', 'student_email' => 'citra@mindfuledu.test'],
+            ['email' => 'parent.dewi@mindfuledu.test', 'name' => 'Orang Tua Dewi', 'student_email' => 'dewi@mindfuledu.test'],
+            ['email' => 'parent.eko@mindfuledu.test', 'name' => 'Orang Tua Eko', 'student_email' => 'eko@mindfuledu.test'],
+        ];
+
+        foreach ($parents as $parentData) {
+            $parent = User::updateOrCreate(
+                ['email' => $parentData['email']],
+                [
+                    'name' => $parentData['name'],
+                    'password' => Hash::make('password'),
+                    'school_id' => $schools['SDN Contoh 1']->id,
+                    'school' => 'SDN Contoh 1',
+                    'approval_status' => 'approved',
+                    'profile_completed' => true,
+                ]
+            );
+            $parent->assignRole('parent');
+
+            $student = User::where('email', $parentData['student_email'])->first();
+            if ($student) {
+                $parent->parentChildren()->syncWithoutDetaching([
+                    $student->id => ['verified_at' => now()],
+                ]);
+            }
         }
     }
 }

@@ -1252,6 +1252,10 @@ Contoh guru:
 |---|---|---|---|
 | Bu Sari | guru@mindfuledu.test | SDN Contoh 1 | 5A |
 | Pak Bima | guru.bima@mindfuledu.test | SDN Contoh 1 | 5B |
+| Bu Dina | guru.dina@mindfuledu.test | SDN Contoh 1 | 5A |
+| Pak Rizal | guru.rizal@mindfuledu.test | SDN Contoh 1 | 5B |
+| Bu Maya | guru.maya@mindfuledu.test | SDN Contoh 1 | 5A |
+| Pak Andi | guru.andi@mindfuledu.test | SDN Contoh 1 | 5B |
 | Bu Rani | guru.rani@mindfuledu.test | SDN Contoh 2 | 6A |
 
 Contoh siswa:
@@ -1270,7 +1274,11 @@ Contoh parent:
 
 | Nama | Email | Terhubung ke |
 |---|---|---|
-| Parent Demo | parent@mindfuledu.test | Ani |
+| Orang Tua Ani | parent@mindfuledu.test | Ani |
+| Orang Tua Budi | parent.budi@mindfuledu.test | Budi |
+| Orang Tua Citra | parent.citra@mindfuledu.test | Citra |
+| Orang Tua Dewi | parent.dewi@mindfuledu.test | Dewi |
+| Orang Tua Eko | parent.eko@mindfuledu.test | Eko |
 
 ---
 
