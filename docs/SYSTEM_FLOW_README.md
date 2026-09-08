@@ -1,388 +1,527 @@
-# README Alur Sistem MindfulEdu
+# README Alur Flow Sistem MindfulEdu
 
-Dokumen ini menjelaskan alur sistem MindfulEdu pada kondisi aplikasi saat ini. Fokus dokumen ini adalah alur kerja sistem, fungsi setiap role, hubungan antar fitur, dan bagaimana data mengalir dari aplikasi mobile ke backend Laravel, service AI Python/FastAPI, lalu kembali ke pengguna.
+Dokumen ini menjelaskan alur sistem MindfulEdu pada kondisi terbaru, dimulai dari pendaftaran sekolah sampai pengguna memakai fitur activity, check-in, check-out, jurnal, analisa burnout, rekomendasi mindfulness, parent monitoring, dan dashboard admin.
 
-Dokumen ini dapat digunakan sebagai acuan untuk:
+Dokumen ini bisa dipakai sebagai:
 
-- memahami flow utama aplikasi;
-- menjelaskan fungsi role guru, siswa, dan orang tua;
-- memahami workflow activity, check-in, check-out, analisis burnout, rekomendasi, dan toolkit;
-- membantu developer baru memahami sistem tanpa membaca seluruh source code terlebih dahulu;
-- menjadi dokumen pendukung presentasi, skripsi, atau dokumentasi produk.
+- panduan memahami sistem secara menyeluruh;
+- bahan penjelasan untuk pengguna, admin sekolah, dan super admin;
+- acuan presentasi atau dokumentasi skripsi;
+- pegangan developer saat melanjutkan pengembangan.
 
 ---
 
-## 1. Gambaran Umum Sistem
+## 1. Identitas Sistem
 
-MindfulEdu adalah aplikasi pemantauan aktivitas dan kondisi pengguna berbasis jurnal refleksi, analisis burnout, dan rekomendasi latihan mindfulness.
+MindfulEdu adalah sistem monitoring aktivitas dan kondisi pengguna yang membantu guru, siswa, dan orang tua memahami pola aktivitas, emosi, beban harian, serta kebutuhan pemulihan melalui jurnal reflektif, analisa burnout, dan rekomendasi latihan mindfulness.
 
-Sistem memiliki tiga jenis pengguna:
+Target production saat ini:
 
-1. Guru
-2. Siswa
-3. Orang tua
+```text
+Website       : https://mindfulapps.pkmueu.online
+API Mobile    : https://mindfulapps.pkmueu.online/api
+Download APK  : https://mindfulapps.pkmueu.online/download/android
+Server Path   : /home/ubuntu/mindful
+Database      : mindfuledu
+Container     : mindfuledu_nginx, mindfuledu_php, mindfuledu_db, mindfuledu_ml
+```
 
-Masing-masing role memiliki flow, batas akses, tampilan, dan fungsi yang berbeda.
+Catatan:
 
-Secara teknis, sistem terdiri dari:
+- MindfulEdu bukan alat diagnosis medis.
+- Analisa burnout digunakan sebagai pendukung refleksi.
+- Rekomendasi mindfulness digunakan sebagai latihan pendamping, bukan pengganti bantuan profesional.
+
+---
+
+## 2. Komponen Sistem
+
+Sistem terdiri dari beberapa komponen utama.
 
 | Komponen | Fungsi |
 |---|---|
-| Flutter Mobile App | Antarmuka utama pengguna guru, siswa, dan orang tua |
-| Laravel Backend | Pusat autentikasi, role access, data aktivitas, jurnal, analisis, dan admin |
-| Python/FastAPI AI Service | Pendukung analisis burnout dan rekomendasi mindfulness |
-| MariaDB | Penyimpanan data utama |
-| Filament Admin Panel | Dashboard admin untuk monitoring data |
-| Website Landing Page | Halaman publik dan download APK |
+| Website publik | Pendaftaran sekolah, landing page, dan download APK |
+| Aplikasi Flutter | Aplikasi utama untuk guru, siswa, dan orang tua |
+| Laravel API | Autentikasi, role access, activity, jurnal, analisa, parent monitoring, dan admin |
+| Filament Admin Panel | Dashboard super admin dan admin sekolah |
+| Python/FastAPI Service | Pendukung proses analisa dan rekomendasi |
+| MariaDB | Database utama |
+| Local Notification Flutter | Reminder harian, check-in, dan check-out di perangkat |
 
----
-
-## 2. Prinsip Utama Arsitektur
-
-Prinsip sistem MindfulEdu:
-
-1. Laravel menjadi pusat kendali utama.
-2. Flutter hanya menjadi client aplikasi mobile.
-3. Python/FastAPI hanya menangani analisis dan rekomendasi AI.
-4. Semua data tetap disimpan dan dikelola di Laravel/MariaDB.
-5. Role access dijaga agar data guru, siswa, dan orang tua tidak bercampur.
-6. Hasil analisis disimpan sebagai snapshot agar tidak selalu memanggil AI ulang.
-7. Rekomendasi latihan mindfulness harus mengarah ke teknik yang tersedia di sistem.
-8. Aplikasi tidak menampilkan rumus teknis internal kepada pengguna umum.
-
----
-
-## 3. Alur Besar Sistem
-
-Alur umum MindfulEdu:
+Alur teknis ringkas:
 
 ```text
-Pengguna membuka aplikasi
-  -> memilih role
-  -> login atau register
-  -> melengkapi profil
-  -> membuat atau mengikuti aktivitas
-  -> check-in sebelum aktivitas
-  -> menjalankan aktivitas
-  -> check-out dan menulis jurnal
-  -> sistem melakukan review jurnal
-  -> sistem membuat analisis burnout
-  -> sistem memberikan rekomendasi teknik mindfulness
-  -> pengguna menjalankan latihan mindfulness
-  -> pengguna mengisi evaluasi latihan
-  -> history tersimpan
-```
-
-Alur data teknis:
-
-```text
-Flutter App
+Website / Flutter
   -> Laravel API
   -> MariaDB
-  -> Python/FastAPI AI Service jika perlu analisis AI
-  -> Laravel menyimpan hasil analisis
-  -> Flutter menampilkan hasil ke pengguna
+  -> Service Analisa Python/FastAPI jika dibutuhkan
+  -> Laravel menyimpan hasil
+  -> Flutter / Admin Panel menampilkan hasil
 ```
 
 ---
 
-## 4. Role Dalam Sistem
+## 3. Role Sistem
 
-### 4.1 Guru
+MindfulEdu memiliki beberapa role dengan fungsi berbeda.
 
-Guru adalah pengguna yang berfokus pada:
-
-- pencatatan aktivitas mengajar dan non-mengajar;
-- check-in kondisi sebelum aktivitas;
-- check-out dan jurnal setelah aktivitas;
-- analisis burnout pribadi;
-- membuat activity mengajar untuk siswa;
-- melihat observasi siswa pada activity kelas;
-- memakai toolkit mindfulness;
-- menerima rekomendasi teknik mindfulness.
-
-Menu guru:
-
-| Menu | Fungsi |
+| Role | Akses Utama |
 |---|---|
-| Beranda | Ringkasan aktivitas, status, dan shortcut |
-| Aktivitas | Membuat, mengedit, membatalkan, check-in, check-out activity |
-| Analisis | Melihat analisis harian, mingguan, bulanan |
-| Toolkit | Membuka pengetahuan dan latihan mindfulness |
-| Profil | Edit profil, avatar, reminder, login history, logout |
+| Super Admin | Mengelola semua sekolah, admin sekolah, guru, siswa, parent, activity, analisa, dan data sistem |
+| Admin Sekolah | Mengelola data dalam sekolahnya sendiri |
+| Guru | Membuat activity, check-in, check-out, melihat analisa diri, dan observasi siswa |
+| Siswa | Membuat activity pribadi, join activity kelas, check-in, check-out, melihat analisa diri |
+| Parent | Menghubungkan anak dan memantau activity, mood, analisa, serta rekomendasi pendampingan anak |
 
-Tema guru menggunakan warna hijau.
+Prinsip pemisahan akses:
 
-### 4.2 Siswa
-
-Siswa adalah pengguna yang berfokus pada:
-
-- pencatatan aktivitas belajar pribadi;
-- mengikuti activity kelas dari guru;
-- check-in sebelum belajar;
-- check-out dan jurnal setelah belajar;
-- analisis burnout siswa;
-- rekomendasi teknik mindfulness;
-- toolkit mindfulness;
-- kode verifikasi untuk orang tua.
-
-Menu siswa:
-
-| Menu | Fungsi |
-|---|---|
-| Beranda | Ringkasan aktivitas siswa |
-| Aktivitas | Membuat aktivitas pribadi dan join aktivitas kelas guru |
-| Analisis | Melihat analisis burnout siswa |
-| Toolkit | Membuka pengetahuan dan latihan mindfulness |
-| Profil | Edit profil, avatar, sekolah, kelas, kode parent, reminder, logout |
-
-Tema siswa menggunakan warna biru.
-
-### 4.3 Orang Tua
-
-Orang tua adalah pengguna yang berfokus pada monitoring anak.
-
-Orang tua dapat:
-
-- login/register sebagai parent;
-- menghubungkan akun anak memakai kode verifikasi siswa;
-- melihat aktivitas anak;
-- melihat check-in dan check-out anak;
-- melihat analisis anak;
-- melihat rekomendasi pendampingan.
-
-Menu orang tua:
-
-| Menu | Fungsi |
-|---|---|
-| Anak | Dashboard monitoring anak |
-| Profil | Edit profil, hubungkan anak, login history, logout |
-
-Tema orang tua menggunakan warna cokelat/oranye lembut.
+- data sekolah tidak boleh bercampur antar sekolah;
+- guru hanya melihat data yang relevan dengan sekolah dan activity kelasnya;
+- siswa hanya melihat activity dirinya dan activity kelas yang sesuai;
+- parent hanya melihat anak yang sudah terhubung;
+- admin sekolah hanya mengelola data sekolahnya sendiri;
+- super admin dapat melihat semua data.
 
 ---
 
-## 5. Alur Auth dan Akses Role
+## 4. Flow Besar Dari Awal Sampai Akhir
 
-### 5.1 Pilih Role
-
-Sebelum login, pengguna memilih akses:
+Flow utama sistem:
 
 ```text
-Guru
-Siswa
-Orang Tua
+Sekolah mendaftar lewat website
+  -> Super admin meninjau pendaftaran sekolah
+  -> Sekolah disetujui
+  -> Admin sekolah dibuat atau diaktifkan
+  -> Admin sekolah login ke dashboard sekolah
+  -> Admin sekolah membuat/mengelola kelas
+  -> Guru dan siswa register dari aplikasi
+  -> Guru dan siswa menunggu approval admin sekolah
+  -> Admin sekolah approve akun guru/siswa
+  -> Guru dan siswa login ke aplikasi
+  -> Guru membuat activity kelas atau pribadi
+  -> Siswa membuat activity pribadi atau join activity kelas
+  -> Pengguna melakukan check-in
+  -> Pengguna melakukan check-out dan mengisi jurnal
+  -> Sistem membuat analisa dan rekomendasi
+  -> Pengguna melihat hasil analisa
+  -> Pengguna membuka toolkit mindfulness
+  -> Pengguna menjalankan guided mindfulness
+  -> Pengguna mengisi evaluasi latihan
+  -> Parent memantau anak jika sudah terhubung
+  -> Admin melihat data sesuai scope akses
 ```
 
-Pilihan role menentukan:
+---
 
-- form login/register;
-- tema warna;
-- halaman setelah login;
-- API yang boleh diakses;
-- menu navigasi;
-- data yang boleh ditampilkan.
+## 5. Flow Pendaftaran Sekolah
 
-### 5.2 Register Email
+Pendaftaran sekolah dilakukan dari website publik, bukan dari aplikasi mobile.
+
+Alur:
+
+```text
+Pihak sekolah membuka website
+  -> masuk ke form daftar sekolah
+  -> mengisi data sekolah dan kontak penanggung jawab
+  -> memilih provinsi, kota/kabupaten, lalu kecamatan secara bertingkat
+  -> submit pendaftaran
+  -> status sekolah menjadi pending
+  -> super admin meninjau data
+  -> super admin approve atau reject
+```
+
+Data pendaftaran sekolah:
+
+| Field | Keterangan |
+|---|---|
+| Nama sekolah | Nama resmi sekolah |
+| NPSN | Nomor pokok sekolah nasional jika ada |
+| Jenjang pendidikan | Contoh SD, SMP, SMA |
+| Status sekolah | Negeri atau swasta |
+| Alamat | Alamat lengkap |
+| Provinsi | Dipilih dari dropdown wilayah Indonesia |
+| Kota/Kabupaten | Muncul otomatis sesuai provinsi yang dipilih |
+| Kecamatan | Muncul otomatis sesuai kota/kabupaten yang dipilih |
+| Nama kontak | Penanggung jawab pendaftaran |
+| Jabatan kontak | Jabatan penanggung jawab |
+| Email kontak | Email yang bisa dihubungi |
+| Nomor telepon | Nomor kontak sekolah |
+
+Status pendaftaran sekolah:
+
+| Status | Arti |
+|---|---|
+| Pending | Sekolah baru mendaftar dan menunggu review |
+| Approved | Sekolah diterima dan bisa dipakai untuk register pengguna |
+| Rejected | Sekolah ditolak atau data belum valid |
+
+Setelah sekolah approved:
+
+- sekolah muncul pada pilihan sekolah di aplikasi;
+- admin sekolah dapat dibuat atau diaktifkan;
+- guru dan siswa dapat register memilih sekolah tersebut;
+- kelas dapat dibuat untuk sekolah tersebut.
+
+Catatan nested choice wilayah:
+
+- pilihan kota/kabupaten terkunci sampai provinsi dipilih;
+- pilihan kecamatan terkunci sampai kota/kabupaten dipilih;
+- data wilayah diambil melalui endpoint Laravel agar form website tidak menyimpan data wilayah terlalu besar;
+- nilai yang disimpan ke database tetap berupa nama provinsi, kota/kabupaten, dan kecamatan.
+
+---
+
+## 6. Flow Super Admin
+
+Super admin adalah pengelola pusat sistem.
+
+Alur kerja super admin:
+
+```text
+Super admin login ke dashboard
+  -> membuka kategori sekolah
+  -> meninjau pendaftaran sekolah
+  -> approve sekolah valid
+  -> membuat admin sekolah
+  -> memantau data guru, siswa, parent, activity, dan analisa
+```
+
+Fungsi super admin:
+
+| Modul | Fungsi |
+|---|---|
+| School Registrations | Meninjau pendaftaran sekolah yang masuk |
+| Schools | Mengelola sekolah approved |
+| School Admins | Membuat dan mengelola admin sekolah |
+| Teacher Registrations | Melihat pendaftaran guru |
+| Student Registrations | Melihat pendaftaran siswa |
+| Teacher Data | Melihat dan mengelola data guru |
+| Student Data | Melihat dan mengelola data siswa |
+| Parent Management | Melihat data parent |
+| Teacher Activities | Melihat activity guru |
+| Student Activities | Melihat activity siswa |
+| Teacher Burnout Analysis | Melihat analisa guru |
+| Student Burnout Analysis | Melihat analisa siswa |
+| Student Observations | Melihat observasi siswa |
+| Mindful Tactics | Mengelola daftar teknik mindfulness |
+| Mindfulness Sessions | Melihat sesi latihan pengguna |
+| Badges | Mengelola badge |
+| Login Histories | Melihat riwayat login |
+
+Kategori dashboard super admin:
+
+```text
+Sekolah
+  -> School Registrations
+  -> Schools
+  -> School Admins
+  -> Classes
+
+Guru
+  -> Teacher Registrations
+  -> Teacher Data
+  -> Teacher Activities
+  -> Teacher Burnout Analysis
+
+Siswa
+  -> Student Registrations
+  -> Student Data
+  -> Student Activities
+  -> Student Burnout Analysis
+  -> Student Observations
+
+Parent
+  -> Parent Management
+
+Mindfulness
+  -> Mindful Tactics
+  -> Mindfulness Sessions
+```
+
+---
+
+## 7. Flow Admin Sekolah
+
+Admin sekolah hanya mengelola data sekolahnya sendiri.
+
+Alur kerja:
+
+```text
+Admin sekolah login
+  -> membuka dashboard sekolah
+  -> melengkapi data sekolah jika perlu
+  -> membuat kelas
+  -> meninjau pendaftaran guru dan siswa
+  -> approve atau reject akun
+  -> mengelola password user jika user lupa password
+  -> memantau activity, analisa, parent, dan observasi siswa
+```
+
+Fungsi admin sekolah:
+
+| Modul | Fungsi |
+|---|---|
+| School Profile | Melihat/mengelola profil sekolah |
+| Classes | Membuat kelas dalam sekolah |
+| Teacher Registrations | Approve/reject guru sekolah tersebut |
+| Student Registrations | Approve/reject siswa sekolah tersebut |
+| Teacher Data | Mengelola data guru sekolah |
+| Student Data | Mengelola data siswa sekolah |
+| Parent Management | Melihat parent yang terhubung dengan siswa sekolah |
+| Teacher Activities | Melihat activity guru sekolah |
+| Student Activities | Melihat activity siswa sekolah |
+| Teacher Burnout Analysis | Melihat analisa guru sekolah |
+| Student Burnout Analysis | Melihat analisa siswa sekolah |
+| Student Observations | Melihat observasi siswa pada activity kelas |
+| Password Management | Mengubah password guru/siswa jika lupa |
+
+Aturan penting:
+
+- admin sekolah tidak melihat data sekolah lain;
+- admin sekolah dapat membantu reset password user di sekolahnya;
+- akun guru/siswa belum bisa login sebelum approved;
+- admin sekolah dapat menata kelas agar activity mengajar bisa ditargetkan.
+
+---
+
+## 8. Flow Register Pengguna Di Aplikasi
+
+Register guru, siswa, dan parent dilakukan dari aplikasi mobile.
+
+### 8.1 Register Email
 
 Alur register email:
 
 ```text
-Pilih role
-  -> isi email dan password
-  -> isi data role tertentu jika diperlukan
-  -> Laravel validasi data
-  -> Laravel membuat user
-  -> Laravel assign role
-  -> Laravel membuat token login
-  -> Flutter masuk ke shell sesuai role
+Pengguna membuka aplikasi
+  -> memilih role
+  -> memilih daftar dengan email
+  -> mengisi nama, email, password, dan data role
+  -> memilih sekolah jika role guru/siswa
+  -> memilih kelas jika role siswa
+  -> submit register
+  -> sistem membuat akun
+  -> jika guru/siswa, akun berstatus pending
+  -> aplikasi menampilkan pesan menunggu approval admin sekolah
+  -> pengguna kembali ke halaman login
 ```
 
-Data utama register:
+Data umum:
 
-| Field | Guru | Siswa | Orang Tua |
+| Field | Guru | Siswa | Parent |
 |---|---:|---:|---:|
-| Nama | Opsional | Opsional | Opsional |
+| Nama | Wajib/opsional sesuai form | Wajib/opsional sesuai form | Wajib/opsional sesuai form |
 | Email | Wajib | Wajib | Wajib |
 | Password | Wajib | Wajib | Wajib |
-| Konfirmasi password | Wajib | Wajib | Wajib |
-| Sekolah | Bisa dilengkapi nanti | Bisa dilengkapi nanti | Wajib untuk link anak |
-| Kelas | Tidak wajib | Bisa dilengkapi nanti | Tidak digunakan |
-| Kode siswa | Tidak digunakan | Dibuat sistem | Dipakai untuk link anak |
+| Sekolah | Wajib | Wajib | Wajib untuk link anak |
+| Kelas | Tidak wajib | Wajib/opsional sesuai sekolah | Tidak digunakan |
+| Kode siswa | Tidak digunakan | Dibuat sistem | Dipakai parent untuk link anak |
 
-### 5.3 Login Email
+Hasil register:
+
+| Role | Status awal | Bisa langsung login? |
+|---|---|---:|
+| Guru | Pending approval | Tidak |
+| Siswa | Pending approval | Tidak |
+| Parent | Approved | Ya, jika data link anak valid |
+
+### 8.2 Register Google
+
+Register Google tetap meminta password agar pengguna juga bisa login memakai email dan password di perangkat lain.
+
+Alur:
+
+```text
+Pengguna memilih role
+  -> memilih daftar dengan Google
+  -> memilih akun Google
+  -> aplikasi mengambil data Google
+  -> pengguna mengisi password akun MindfulEdu
+  -> pengguna memilih sekolah
+  -> siswa memilih kelas jika dibutuhkan
+  -> submit register
+  -> akun dibuat dengan google_id dan password
+  -> jika guru/siswa, akun menunggu approval
+  -> aplikasi kembali ke halaman login
+```
+
+Manfaat password pada register Google:
+
+- pengguna tetap bisa login menggunakan Google setelah approved;
+- pengguna juga bisa login manual dengan email Google dan password yang dibuat;
+- jika pindah perangkat, pengguna tidak tergantung pada login Google saja.
+
+### 8.3 Pesan Setelah Register
+
+Untuk guru dan siswa:
+
+```text
+Terima kasih sudah daftar. Akun Anda menunggu approval admin sekolah.
+Silakan login kembali setelah akun disetujui.
+```
+
+Untuk parent:
+
+```text
+Akun berhasil dibuat. Silakan login untuk memantau anak.
+```
+
+---
+
+## 9. Flow Approval Akun Guru dan Siswa
+
+Guru dan siswa tidak bisa masuk dashboard aplikasi sebelum approved.
+
+Alur:
+
+```text
+Guru/siswa register
+  -> status akun pending
+  -> admin sekolah membuka Teacher/Student Registrations
+  -> admin sekolah cek data akun
+  -> admin approve atau reject
+  -> jika approved, akun bisa login
+  -> jika rejected, akun tidak bisa login
+```
+
+Saat user pending mencoba login:
+
+```text
+Akun Anda masih menunggu approval admin sekolah.
+```
+
+Approval dilakukan dari dashboard admin, bukan dari aplikasi mobile.
+
+---
+
+## 10. Flow Login
+
+Login selalu berbasis role.
 
 Alur login email:
 
 ```text
-Pilih role
-  -> isi email dan password
-  -> Laravel cek kredensial
-  -> Laravel cek apakah role akun sesuai
-  -> Laravel hapus token lama user
-  -> Laravel buat token baru
-  -> Laravel simpan login history
-  -> Flutter masuk sesuai role
+Pengguna memilih role
+  -> memasukkan email dan password
+  -> aplikasi mengirim request login
+  -> Laravel mengecek email, password, role, dan approval
+  -> jika valid, token dibuat
+  -> token lama akun tersebut dicabut
+  -> aplikasi masuk ke dashboard sesuai role
 ```
 
-Jika pengguna memilih role yang salah, login ditolak.
-
-Contoh:
+Alur login Google:
 
 ```text
-Akun guru tidak bisa login melalui akses siswa.
-Akun siswa tidak bisa login melalui akses guru.
-Akun parent tidak bisa login melalui akses guru atau siswa.
+Pengguna memilih role
+  -> memilih login Google
+  -> aplikasi mengambil id token Google
+  -> Laravel mencari akun yang sudah terdaftar
+  -> Laravel mengecek role dan approval
+  -> jika valid, token dibuat
+  -> aplikasi masuk dashboard
 ```
 
-### 5.4 Google Sign-In
+Aturan login:
 
-Alur Google Sign-In:
-
-```text
-Pilih role
-  -> pilih login/register dengan Google
-  -> Flutter meminta token Google
-  -> Laravel validasi token Google
-  -> Laravel cek atau membuat akun
-  -> Laravel assign role jika akun baru
-  -> Laravel cek role jika akun lama
-  -> Laravel membuat token Sanctum
-  -> Flutter masuk sesuai role
-```
-
-### 5.5 Quick Login PIN/Biometrik
-
-Jika pengguna mengaktifkan simpan akun:
-
-```text
-Token dan ringkasan akun disimpan aman di perangkat
-  -> user membuka app kembali
-  -> user memilih role yang sama
-  -> user menggunakan PIN/biometrik
-  -> app memakai token tersimpan
-  -> jika token masih valid, user masuk
-```
-
-Jika token sudah dicabut karena login di perangkat lain, aplikasi meminta login ulang.
-
-### 5.6 Single Active Session
-
-Sistem menjaga agar satu akun hanya aktif pada satu perangkat.
-
-Alurnya:
-
-```text
-User login di perangkat A
-  -> token A aktif
-User login di perangkat B
-  -> Laravel menghapus token lama
-  -> token B aktif
-Perangkat A mengakses API
-  -> token A tidak valid
-  -> app otomatis keluar atau menampilkan pesan sesi dipindahkan
-```
-
-Login history menyimpan:
-
-- role;
-- device id;
-- device name;
-- device brand;
-- device model;
-- platform;
-- IP address;
-- lokasi default;
-- waktu login;
-- apakah sesi lama dicabut.
+- role login harus sama dengan role akun;
+- guru tidak bisa login melalui pintu siswa;
+- siswa tidak bisa login melalui pintu guru;
+- parent tidak bisa login melalui pintu guru/siswa;
+- akun pending tidak bisa login;
+- satu akun hanya memiliki satu sesi aktif.
 
 ---
 
-## 6. Alur Profil
+## 11. Keamanan Sesi dan Login History
 
-### 6.1 Profil Guru
+Sistem memakai single active session.
 
-Alur profil guru:
+Artinya:
 
-```text
-Guru masuk aplikasi
-  -> buka Profil
-  -> isi nama
-  -> isi sekolah
-  -> upload avatar
-  -> data disimpan ke Laravel
-```
+- jika akun login di perangkat baru, token lama dicabut;
+- perangkat lama akan keluar saat mengakses API lagi;
+- login baru dicatat ke login history.
 
-Sekolah guru penting untuk activity kelas. Siswa hanya dapat melihat activity guru jika sekolahnya sama.
+Data login history:
 
-### 6.2 Profil Siswa
-
-Alur profil siswa:
-
-```text
-Siswa masuk aplikasi
-  -> buka Profil
-  -> isi nama
-  -> isi sekolah
-  -> isi kelas
-  -> upload avatar
-  -> salin kode parent jika diperlukan
-```
-
-Kode parent/kode verifikasi siswa digunakan agar orang tua bisa menghubungkan akun.
-
-### 6.3 Profil Orang Tua
-
-Alur profil orang tua:
-
-```text
-Orang tua masuk aplikasi
-  -> buka Profil
-  -> isi data orang tua
-  -> masukkan kode siswa
-  -> masukkan sekolah anak
-  -> Laravel validasi kode dan sekolah
-  -> akun parent terhubung ke siswa
-```
-
-Jika sekolah tidak sama, relasi tidak dibuat.
+| Data | Keterangan |
+|---|---|
+| Role | Role saat login |
+| Device ID | Identitas perangkat |
+| Device name | Nama perangkat |
+| Brand | Merek perangkat |
+| Model | Model perangkat |
+| Platform | Android/iOS |
+| IP address | IP login |
+| Lokasi | Default Jakarta |
+| Waktu login | Waktu login |
+| Revoked previous sessions | Apakah sesi lama dicabut |
 
 ---
 
-## 7. Alur Activity
+## 12. Flow Dashboard Aplikasi
 
-Activity adalah data inti yang menghubungkan jadwal, check-in, check-out, jurnal, analisis, dan rekomendasi.
+Dashboard aplikasi berbeda sesuai role.
 
-### 7.1 Status Activity
+### 12.1 Dashboard Guru
 
-| Status | Arti |
-|---|---|
-| planned | Activity dibuat, belum check-in |
-| checked_in | User sudah check-in |
-| completed | User sudah check-out |
-| cancelled | Activity dibatalkan |
+Guru melihat:
 
-### 7.2 Form Activity
+- ringkasan activity hari ini;
+- activity yang belum check-in;
+- activity yang sedang berjalan;
+- activity yang selesai;
+- hasil analisa terbaru;
+- rekomendasi mindfulness;
+- shortcut ke activity, analisa, toolkit, dan profil.
 
-Form activity berisi:
+### 12.2 Dashboard Siswa
 
-| Field | Fungsi |
-|---|---|
-| Nama kegiatan | Judul activity |
-| Tanggal mulai | Tanggal activity |
-| Pengulangan | Sekali, mingguan, bulanan |
-| Ulang sampai | Batas pengulangan |
-| Jam mulai | Jadwal mulai activity |
-| Jam selesai | Jadwal selesai activity |
-| Jenis activity | Kategori sesuai role |
-| Jenis activity lainnya | Input bebas jika memilih Lainnya |
-| Target kelas | Khusus guru saat memilih Mengajar |
+Siswa melihat:
 
-### 7.3 Activity Guru
+- activity pribadi;
+- activity kelas yang sudah dijoin;
+- status check-in/check-out;
+- ringkasan mood;
+- hasil analisa terbaru;
+- rekomendasi mindfulness;
+- shortcut ke activity, analisa, toolkit, dan profil.
+
+### 12.3 Dashboard Parent
+
+Parent melihat:
+
+- daftar anak yang terhubung;
+- activity anak pada tanggal tertentu;
+- mood check-in anak;
+- mood check-out anak;
+- hasil analisa burnout anak;
+- rekomendasi pendampingan untuk anak.
+
+---
+
+## 13. Flow Activity Guru
+
+Guru dapat membuat activity pribadi dan activity mengajar.
+
+Alur activity guru:
+
+```text
+Guru login
+  -> buka menu Activity
+  -> tambah activity
+  -> isi judul, tanggal, jam mulai, jam selesai, jenis activity
+  -> jika Mengajar, pilih target kelas jika perlu
+  -> simpan
+  -> activity muncul di daftar guru
+  -> jika activity classroom, siswa yang sesuai dapat melihat dan join
+```
 
 Jenis activity guru:
 
-| Kode | Nama |
+| Kode | Label |
 |---|---|
 | teaching | Mengajar |
 | meeting | Rapat |
@@ -392,13 +531,46 @@ Jenis activity guru:
 | break | Istirahat |
 | other | Lainnya |
 
-Jika guru memilih `teaching`, activity bisa menjadi activity kelas.
+Activity mengajar:
 
-### 7.4 Activity Siswa
+- jika target kelas dipilih, hanya siswa kelas tersebut yang bisa join;
+- jika target kelas kosong, semua siswa dalam sekolah yang sama bisa join;
+- siswa dari sekolah lain tidak bisa melihat activity tersebut.
+
+Status activity:
+
+| Status | Arti |
+|---|---|
+| Planned | Activity dibuat, belum check-in |
+| Checked in | Pengguna sudah check-in |
+| Completed | Pengguna sudah check-out |
+| Cancelled | Activity dibatalkan |
+
+---
+
+## 14. Flow Activity Siswa
+
+Siswa memiliki dua sumber activity.
+
+| Sumber | Keterangan |
+|---|---|
+| Activity pribadi | Dibuat sendiri oleh siswa |
+| Activity kelas | Dibuat guru lalu dijoin oleh siswa |
+
+Alur activity pribadi:
+
+```text
+Siswa login
+  -> buka menu Activity
+  -> tambah activity
+  -> isi judul, tanggal, jam, dan jenis activity
+  -> simpan
+  -> activity muncul sebagai activity pribadi siswa
+```
 
 Jenis activity siswa:
 
-| Kode | Nama |
+| Kode | Label |
 |---|---|
 | class_learning | Belajar di kelas |
 | group_study | Belajar bersama |
@@ -408,561 +580,250 @@ Jenis activity siswa:
 | break | Istirahat |
 | other | Lainnya |
 
-Siswa bisa membuat activity pribadi dan juga join activity kelas dari guru.
+---
 
-### 7.5 Activity Type
+## 15. Flow Join Activity Kelas
 
-Sistem memiliki tiga tipe activity:
+Siswa dapat join activity kelas yang dibuat guru.
 
-| Type | Penjelasan |
+Alur:
+
+```text
+Guru membuat activity Mengajar
+  -> activity tersimpan sebagai classroom
+  -> siswa membuka daftar activity kelas tersedia
+  -> sistem filter berdasarkan sekolah dan kelas
+  -> siswa memilih join
+  -> sistem membuat activity siswa yang terhubung ke activity guru
+  -> siswa dapat check-in setelah guru check-in
+```
+
+Syarat activity kelas muncul untuk siswa:
+
+- activity dibuat oleh guru;
+- jenis activity adalah Mengajar;
+- activity belum cancelled;
+- sekolah guru sama dengan sekolah siswa;
+- jika guru memilih target kelas, kelas siswa harus sama;
+- jika target kelas kosong, semua siswa satu sekolah bisa melihat;
+- siswa belum join activity tersebut.
+
+Activity siswa hasil join menyimpan `teacher_activity_id` agar hubungan guru-siswa tetap tercatat.
+
+---
+
+## 16. Flow Check-In
+
+Check-in mencatat kondisi sebelum activity.
+
+Alur:
+
+```text
+Pengguna membuka activity
+  -> menekan Check-in
+  -> memilih mood jika ingin
+  -> mengisi intensitas jika mood dipilih
+  -> menulis alasan/pemicu jika ada
+  -> submit
+  -> status activity berubah menjadi Checked in
+```
+
+Field check-in:
+
+| Field | Keterangan |
 |---|---|
-| personal | Activity pribadi guru atau siswa |
-| classroom | Activity mengajar yang dibuat guru |
-| classroom_student | Activity siswa hasil join dari activity guru |
+| Mood | Senang, tenang, cemas, sedih, marah |
+| Intensitas | Skala 1 sampai 10 jika mood dipilih |
+| Alasan | Pemicu atau kondisi sebelum activity |
 
-### 7.6 Alur Buat Activity Pribadi
+Aturan activity kelas:
 
-```text
-User membuka menu Aktivitas
-  -> klik tambah
-  -> isi nama, tanggal, jam, jenis
-  -> simpan
-  -> Flutter mengirim POST /activities
-  -> Laravel membuat activity
-  -> activity muncul di list
-  -> reminder check-in/check-out dijadwalkan jika jam tersedia
-```
-
-### 7.7 Alur Edit Activity
-
-```text
-User membuka activity
-  -> klik edit
-  -> ubah data
-  -> simpan
-  -> Flutter mengirim PUT /activities/{id}
-  -> Laravel update data activity
-  -> Flutter mengganti card lama dengan data terbaru
-```
-
-### 7.8 Alur Cancel Activity
-
-```text
-User membuka activity
-  -> klik cancel
-  -> Laravel mengubah status menjadi cancelled
-  -> activity tidak dihitung sebagai completed
-  -> list diperbarui sesuai filter
-```
-
-### 7.9 Alur Duplicate Activity
-
-```text
-User memilih duplicate
-  -> memilih tanggal baru
-  -> Laravel membuat activity baru dari data lama
-  -> status kembali planned
-  -> check-in/check-out lama tidak ikut disalin
-```
-
-### 7.10 Alur Repeat Activity
-
-Saat membuat activity, user bisa memilih:
-
-- sekali;
-- mingguan;
-- bulanan.
-
-Alurnya:
-
-```text
-User memilih repeat mingguan/bulanan
-  -> user memilih tanggal akhir
-  -> Flutter menghitung estimasi jumlah activity
-  -> Laravel membuat beberapa activity
-  -> Laravel melewati data yang dianggap duplikat
-  -> response memberi jumlah created dan skipped
-```
+- siswa tidak bisa check-in sebelum guru check-in;
+- jika guru belum check-in, aplikasi menampilkan pesan bahwa activity belum dimulai oleh guru;
+- setelah guru check-in, siswa yang sudah join dapat check-in.
 
 ---
 
-## 8. Alur Check-In
+## 17. Flow Check-Out dan Jurnal
 
-Check-in adalah pencatatan kondisi sebelum activity dimulai.
-
-### 8.1 Form Check-In
-
-| Field | Wajib | Keterangan |
-|---|---:|---|
-| Mood | Opsional | Senang, tenang, cemas, sedih, marah |
-| Intensitas | Wajib jika mood dipilih | Skala 1 sampai 10 |
-| Kenapa | Opsional | Pemicu kondisi sebelum activity |
-
-### 8.2 Alur Check-In Normal
-
-```text
-User membuka activity planned
-  -> klik Check-in
-  -> pilih mood
-  -> pilih intensitas
-  -> isi alasan jika perlu
-  -> simpan
-  -> Laravel menyimpan checkin_at, mood, intensity, trigger
-  -> status activity menjadi checked_in
-  -> activity event dicatat
-```
-
-### 8.3 Output Check-In
-
-Setelah check-in:
-
-- status activity berubah;
-- waktu check-in tersimpan;
-- mood awal tersimpan;
-- trigger awal tersimpan;
-- activity masuk ledger;
-- card activity diperbarui di aplikasi.
-
----
-
-## 9. Alur Check-Out dan Jurnal
-
-Check-out adalah pencatatan kondisi setelah activity selesai.
-
-### 9.1 Form Check-Out
-
-| Field | Wajib | Keterangan |
-|---|---:|---|
-| Mood | Opsional | Mood setelah activity |
-| Apa yang terjadi tadi? | Minimal salah satu dengan perasaan | Fakta kejadian |
-| Bagaimana perasaanmu soal itu? | Minimal salah satu dengan fakta | Respons emosional |
-| Pola yang kamu sadari | Opsional | Pola yang berulang |
-| Rencana ke depan | Opsional | Langkah berikutnya |
-| Tandai jika terasa | Opsional, khusus guru | Dimensi burnout |
-
-### 9.2 Alur Check-Out
-
-```text
-User membuka activity checked_in
-  -> klik Check-out
-  -> isi mood setelah activity
-  -> isi fakta/perasaan
-  -> isi pola dan rencana jika ada
-  -> guru dapat memilih tag burnout manual
-  -> simpan
-  -> Laravel menyimpan jurnal
-  -> Laravel menjalankan review jurnal
-  -> Laravel menyimpan hasil review
-  -> status activity menjadi completed
-```
-
-### 9.3 Output Check-Out
-
-Setelah check-out:
-
-- checkout_at tersimpan;
-- actual_hours dihitung;
-- jurnal tersimpan;
-- mood detected dapat muncul;
-- suggestion/review muncul;
-- burnout tag otomatis dapat muncul;
-- recommendation technique dapat muncul;
-- activity dihitung dalam analisis.
-
----
-
-## 10. Alur Activity Kelas Guru dan Siswa
-
-Activity kelas menghubungkan guru dan siswa.
-
-### 10.1 Guru Membuat Activity Mengajar
+Check-out mencatat kondisi setelah activity selesai.
 
 Alur:
 
 ```text
-Guru membuka Aktivitas
-  -> tambah activity
-  -> memilih jenis Mengajar
-  -> mengisi target kelas atau mengosongkan
-  -> simpan
-  -> Laravel membuat activity_type classroom
+Pengguna membuka activity yang sudah check-in
+  -> menekan Check-out
+  -> memilih mood setelah activity
+  -> mengisi jurnal refleksi
+  -> submit
+  -> activity berubah menjadi Completed
+  -> sistem menjalankan review jurnal
+  -> hasil tersimpan untuk analisa dan rekomendasi
 ```
 
-Aturan target kelas:
+Field check-out:
 
-| Kondisi | Dampak |
+| Field | Keterangan |
 |---|---|
-| Target kelas kosong | Semua siswa di sekolah yang sama bisa join |
-| Target kelas diisi | Hanya siswa dengan kelas yang sama bisa join |
-| Sekolah berbeda | Siswa tidak bisa melihat/join |
+| Mood | Mood setelah activity |
+| Apa yang terjadi tadi? | Fakta kejadian selama activity |
+| Bagaimana perasaanmu soal itu? | Refleksi perasaan |
+| Pola yang disadari | Pola kondisi yang muncul |
+| Rencana ke depan | Rencana perbaikan |
+| Tag burnout | Khusus guru, jika merasa ada dimensi burnout tertentu |
 
-### 10.2 Siswa Mencari Activity Kelas
+Minimal salah satu dari fakta atau perasaan harus diisi.
 
-Alur:
+Aturan activity kelas:
 
-```text
-Siswa membuka menu Aktivitas
-  -> klik cari kelas dari guru
-  -> Flutter meminta daftar activity available
-  -> Laravel mencari activity classroom yang sesuai sekolah/kelas
-  -> siswa memilih activity
-  -> siswa klik join
-```
-
-### 10.3 Siswa Join Activity Kelas
-
-Saat siswa join:
-
-```text
-Laravel membuat activity baru milik siswa
-  -> activity_type = classroom_student
-  -> teacher_activity_id terisi
-  -> jadwal mengikuti activity guru
-  -> class mengikuti target activity guru jika ada
-```
-
-### 10.4 Aturan Check-In Siswa
-
-Siswa tidak bisa check-in sebelum guru check-in.
-
-Alurnya:
-
-```text
-Siswa klik check-in activity kelas
-  -> Laravel cek teacher_activity_id
-  -> Laravel cek apakah teacher activity sudah checkin_at
-  -> jika belum, request ditolak
-  -> jika sudah, siswa boleh check-in
-```
-
-Pesan kondisi:
-
-```text
-Menunggu guru melakukan check-in.
-```
-
-### 10.5 Aturan Check-Out Siswa
-
-Siswa tidak bisa check-out sebelum guru check-out.
-
-Alurnya:
-
-```text
-Siswa klik check-out activity kelas
-  -> Laravel cek teacher activity
-  -> Laravel cek apakah teacher activity sudah checkout_at
-  -> jika belum, request ditolak
-  -> jika sudah, siswa boleh check-out
-```
-
-Pesan kondisi:
-
-```text
-Menunggu guru melakukan check-out.
-```
-
-### 10.6 Guru Melihat Observasi Siswa
-
-Alur:
-
-```text
-Guru membuka activity classroom
-  -> klik Observasi siswa
-  -> Laravel mengambil semua activity siswa yang join
-  -> Laravel mengirim data check-in, check-out, dan analisis siswa
-  -> Flutter menampilkan daftar observasi
-```
-
-Data observasi:
-
-- nama siswa;
-- kelas siswa;
-- status activity siswa;
-- mood check-in;
-- mood check-out;
-- mood detected;
-- status analisis;
-- rekomendasi.
+- siswa tidak bisa check-out sebelum guru check-out;
+- jika guru belum check-out, siswa diminta menunggu activity guru selesai;
+- setelah guru check-out, siswa dapat check-out dan isi jurnal.
 
 ---
 
-## 11. Alur Parent Monitoring
+## 18. Review Activity
 
-### 11.1 Hubungkan Anak
+Setelah check-out, sistem membuat review activity.
 
-Alur:
+Review dapat berisi:
 
-```text
-Siswa membuka Profil
-  -> siswa menyalin kode parent
-  -> kode diberikan ke orang tua
-  -> orang tua register/login sebagai parent
-  -> orang tua memasukkan kode siswa dan sekolah
-  -> Laravel validasi kode
-  -> Laravel validasi sekolah
-  -> parent_student_links dibuat
-```
+- ringkasan jurnal;
+- indikasi kondisi pengguna;
+- dimensi burnout yang mungkin muncul;
+- saran singkat;
+- rekomendasi teknik mindfulness;
+- alasan rekomendasi.
 
-Jika kode tidak ditemukan, request ditolak.
-
-Jika sekolah berbeda, request ditolak.
-
-### 11.2 Dashboard Orang Tua
-
-Alur:
+Di aplikasi, istilah yang ditampilkan ke pengguna diarahkan menjadi:
 
 ```text
-Parent membuka menu Anak
-  -> Flutter meminta parent dashboard
-  -> Laravel mengambil daftar anak terhubung
-  -> Laravel mengambil activity anak sesuai tanggal
-  -> Laravel mengambil analisis anak
-  -> Flutter menampilkan monitoring
+Analisa
+Rekomendasi
+Review
+Saran
 ```
 
-Data yang ditampilkan:
-
-- daftar anak;
-- sekolah anak;
-- kelas anak;
-- activity anak pada tanggal terpilih;
-- mood check-in;
-- mood check-out;
-- guru terkait jika activity berasal dari kelas;
-- status analisis;
-- rekomendasi pendampingan.
-
-Parent hanya memantau. Parent tidak membuat activity dan tidak mengubah jurnal anak.
+Bukan nama provider atau istilah teknis mesin.
 
 ---
 
-## 12. Alur Analisis Burnout
+## 19. Flow Analisa Burnout
 
-Analisis burnout digunakan untuk memahami kondisi pengguna berdasarkan activity dan jurnal.
+Analisa burnout dapat dilakukan harian, mingguan, dan bulanan.
 
-### 12.1 Jenis Periode
+Alur:
+
+```text
+Activity selesai
+  -> jurnal tersimpan
+  -> review activity tersimpan
+  -> pengguna membuka menu Analisa
+  -> memilih periode harian, mingguan, atau bulanan
+  -> sistem menghitung data activity dan jurnal
+  -> hasil analisa disimpan sebagai snapshot
+  -> aplikasi menampilkan status, skor, faktor dominan, dan rekomendasi
+```
+
+Jenis periode:
 
 | Periode | Fungsi |
 |---|---|
-| daily | Analisis satu hari |
-| weekly | Analisis satu minggu |
-| monthly | Analisis satu bulan |
+| Harian | Melihat kondisi satu tanggal |
+| Mingguan | Melihat pola satu minggu |
+| Bulanan | Melihat kecenderungan satu bulan |
 
-### 12.2 Data Masuk Analisis
+Data yang dianalisa:
 
-Data yang digunakan:
-
-- activity dalam periode;
-- activity completed;
+- jumlah activity;
+- activity selesai;
 - planned hours;
 - actual hours;
+- selisih rencana dan realisasi;
 - mood check-in;
 - mood check-out;
-- check-in trigger;
-- checkout fact;
-- checkout feeling;
-- checkout pattern;
-- checkout plan;
-- burnout tags manual;
-- burnout tags otomatis;
-- review jurnal per activity;
-- rekomendasi teknik mindfulness;
-- self report jika tersedia.
+- jurnal check-out;
+- pola dan rencana pengguna;
+- tag burnout manual;
+- hasil review activity;
+- rekomendasi mindfulness.
 
-### 12.3 Alur Analisis Manual
+Status hasil analisa:
 
-```text
-User membuka menu Analisis
-  -> memilih Harian/Mingguan/Bulanan
-  -> memilih tanggal/periode
-  -> klik Jalankan Manual
-  -> Flutter mengirim POST /burnout-analyses
-  -> Laravel mengambil data activity dan jurnal
-  -> Laravel cek snapshot/cache
-  -> jika data sama, hasil lama dipakai
-  -> jika data berubah, Laravel meminta bantuan AI service
-  -> hasil disimpan ke burnout_analysis_snapshots
-  -> Flutter menampilkan hasil
-```
-
-### 12.4 Alur Analisis Otomatis
-
-Analisis juga dapat muncul otomatis dari:
-
-- dashboard;
-- parent dashboard;
-- overview analisis;
-- review activity setelah check-out.
-
-Alurnya:
-
-```text
-Data activity/jurnal tersedia
-  -> backend membuat preview/overview
-  -> jika snapshot cocok, hasil lama dipakai
-  -> jika perlu, sistem membuat analisis baru
-```
-
-### 12.5 Output Analisis
-
-Output analisis meliputi:
-
-- status akhir;
-- skor risiko;
-- jumlah activity dihitung;
-- jumlah activity selesai;
-- jumlah jurnal dihitung;
-- faktor dominan;
-- ringkasan periode;
-- detail per activity;
-- rekomendasi teknik;
-- alasan rekomendasi;
-- history snapshot.
-
-### 12.6 Analisis Per Activity
-
-Pada screen analisis, sistem menampilkan:
-
-```text
-Kesimpulan periode di bagian atas
-  -> daftar activity yang dihitung
-  -> review/detail masing-masing activity
-  -> rekomendasi teknik per activity
-  -> tombol membuka teknik
-```
-
-Tujuannya agar pengguna memahami:
-
-- activity mana yang paling memengaruhi kondisi;
-- kenapa status akhir muncul;
-- latihan apa yang cocok untuk setiap kondisi;
-- langkah pemulihan yang bisa dilakukan.
-
-### 12.7 History Analisis
-
-Setiap hasil analisis disimpan sebagai snapshot.
-
-Manfaat:
-
-- user dapat melihat riwayat;
-- sistem tidak selalu memanggil AI ulang;
-- analisis lama tetap bisa dibaca;
-- token lebih hemat;
-- performa lebih ringan.
+| Status | Makna |
+|---|---|
+| Rendah | Kondisi relatif stabil |
+| Sedang | Ada tanda perlu pemulihan |
+| Tinggi | Ada tanda beban tinggi dan perlu perhatian |
 
 ---
 
-## 13. Alur Review AI Activity
+## 20. Snapshot dan Cache Analisa
 
-Review AI activity berjalan setelah check-out.
+Hasil analisa disimpan sebagai snapshot.
 
-Alur:
+Tujuannya:
+
+- menyimpan history analisa;
+- mempercepat tampilan aplikasi;
+- menghindari proses analisa berulang jika data belum berubah;
+- menjaga hasil lama tetap dapat dilihat.
+
+Alur snapshot:
 
 ```text
-User check-out
-  -> Laravel menyimpan jurnal
-  -> Laravel mengirim konteks jurnal ke service analisis jika tersedia
-  -> service mengembalikan review
-  -> Laravel menyimpan mood detected, suggestion, tags, dan raw response
-  -> Flutter menampilkan tombol Review AI
+Sistem membaca activity dalam periode
+  -> membuat signature data
+  -> cek snapshot lama
+  -> jika data sama, gunakan snapshot lama
+  -> jika data berubah, buat analisa baru
+  -> simpan snapshot baru
 ```
 
-Isi review:
+Snapshot digunakan untuk:
 
-- ringkasan kondisi;
-- mood terdeteksi;
-- dimensi burnout yang mungkin muncul;
-- saran penurunan beban;
-- teknik mindfulness yang cocok;
-- alasan teknik tersebut dipilih;
-- tanda peringatan jika ada sinyal krisis.
-
-Jika service AI tidak tersedia, sistem menggunakan fallback lokal.
+- history analisa pengguna;
+- dashboard guru/siswa;
+- dashboard parent untuk anak;
+- admin panel.
 
 ---
 
-## 14. Alur Rekomendasi Teknik Mindfulness
+## 21. Flow Rekomendasi Mindfulness
 
-Rekomendasi teknik harus sesuai dengan teknik yang tersedia di sistem.
+Rekomendasi mindfulness muncul dari hasil review activity dan analisa burnout.
 
 Alur:
 
 ```text
-Jurnal dan activity dianalisis
-  -> sistem membaca daftar teknik mindfulness
-  -> AI memilih teknik paling sesuai
-  -> jika AI tidak tersedia, fallback lokal memilih teknik
-  -> hasil rekomendasi disimpan
-  -> Flutter menampilkan tombol Buka Teknik Ini
+Jurnal dan activity dianalisa
+  -> sistem menentukan kondisi dominan
+  -> sistem mencocokkan dengan teknik mindfulness
+  -> rekomendasi muncul di activity atau halaman analisa
+  -> pengguna dapat membuka teknik tersebut di Toolkit
 ```
 
-Contoh:
+Contoh mapping:
 
-```text
-Activity memunculkan cemas dan banyak pikiran
-  -> sistem merekomendasikan Sitting Meditation
-  -> alasan: membantu menyadari pikiran dan emosi tanpa langsung bereaksi
-```
+| Kondisi | Rekomendasi |
+|---|---|
+| Sulit fokus | Mindful Breathing atau Focused Attention |
+| Lelah fisik | Body Scan |
+| Pegal/kaku | Mindful Movement |
+| Banyak pikiran | Sitting Meditation |
+| Overwhelmed | Open Monitoring |
+| Frustrasi | Loving-Kindness |
+| Emosi tidak stabil | Mountain Meditation |
+| Butuh grounding | Mindfulness of Sounds |
+| Jenuh/duduk lama | Walking Meditation |
 
 ---
 
-## 15. Alur Toolkit Mindfulness
+## 22. Flow Toolkit Mindfulness
 
-Toolkit adalah tempat pengguna belajar dan menjalankan teknik mindfulness.
+Toolkit berisi teknik mindfulness yang bisa dibuka pengguna.
 
-### 15.1 Buka Toolkit
-
-Alur:
-
-```text
-User membuka Toolkit
-  -> Flutter meminta GET /toolkit/tactics
-  -> Laravel mengambil mindful_tactics
-  -> Flutter menampilkan daftar teknik
-```
-
-### 15.2 Baca Knowledge
-
-Sebelum latihan, pengguna membaca:
-
-- nama teknik;
-- kategori;
-- deskripsi;
-- knowledge;
-- cocok untuk kondisi apa;
-- durasi;
-- langkah latihan.
-
-### 15.3 Mulai Latihan
-
-Alur:
-
-```text
-User klik Mulai
-  -> screen guided practice terbuka
-  -> step pertama tampil
-  -> timer berjalan
-  -> TTS membacakan instruksi
-  -> saat waktu step selesai, lanjut ke step berikutnya
-  -> user bisa pause/resume/selesai
-```
-
-### 15.4 Evaluasi Latihan
-
-Setelah latihan selesai:
-
-```text
-User memilih kondisi setelah latihan
-  -> Jauh lebih baik
-  -> Lebih baik
-  -> Tidak berubah
-  -> Masih lelah
-  -> Lebih buruk
-```
-
-Setelah memilih evaluasi, user kembali ke halaman sebelumnya.
-
-### 15.5 Teknik Yang Tersedia
+Teknik yang tersedia:
 
 | No | Teknik |
 |---:|---|
@@ -978,142 +839,259 @@ Setelah memilih evaluasi, user kembali ke halaman sebelumnya.
 | 10 | Mountain Meditation |
 | 11 | Informal Mindfulness |
 
----
-
-## 16. Alur Reminder dan Notifikasi
-
-Notifikasi pada aplikasi saat ini berjalan sebagai local notification di perangkat.
-
-### 16.1 Reminder Harian
-
-Alur:
+Alur toolkit:
 
 ```text
-User membuka pengaturan reminder
-  -> user aktifkan reminder
-  -> user memilih jam
-  -> Flutter menyimpan preferensi ke Laravel
-  -> Flutter menjadwalkan notifikasi lokal harian
+Pengguna membuka Toolkit
+  -> memilih teknik
+  -> membaca penjelasan
+  -> menekan Mulai
+  -> guided practice berjalan step-by-step
+  -> instruksi dibacakan menggunakan TTS
+  -> timer berpindah ke langkah berikutnya
+  -> pengguna menyelesaikan latihan
+  -> pengguna mengisi evaluasi setelah latihan
 ```
 
-### 16.2 Reminder Activity
+Setiap teknik memiliki:
 
-Jika activity memiliki jam:
+- judul;
+- kategori;
+- deskripsi;
+- knowledge;
+- durasi;
+- langkah latihan;
+- cue/instruksi;
+- kondisi yang cocok;
+- bookmark.
 
-| Reminder | Waktu |
+Evaluasi setelah latihan:
+
+| Pilihan | Arti |
 |---|---|
-| Check-in | 10 menit sebelum jam mulai |
-| Check-out | Tepat pada jam selesai |
+| Jauh lebih baik | Kondisi membaik signifikan |
+| Lebih baik | Kondisi membaik |
+| Tidak berubah | Tidak ada perubahan terasa |
+| Masih lelah | Masih butuh istirahat |
+| Lebih buruk | Latihan tidak cocok atau perlu berhenti |
+
+---
+
+## 23. Flow Observasi Siswa Oleh Guru
+
+Observasi siswa muncul dari activity kelas.
 
 Alur:
 
 ```text
-Activity dibuat atau diperbarui
-  -> Flutter membaca start_at dan end_at
-  -> Flutter menjadwalkan notifikasi check-in/check-out
-  -> Android menampilkan notifikasi sesuai jadwal
+Guru membuat activity Mengajar
+  -> siswa join activity
+  -> guru check-in
+  -> siswa check-in
+  -> guru check-out
+  -> siswa check-out dan isi jurnal
+  -> guru membuka Observasi Siswa
+  -> sistem menampilkan detail kondisi siswa pada activity tersebut
 ```
 
-Syarat:
+Data yang bisa dilihat guru:
 
-- izin notifikasi Android aktif;
-- jam perangkat benar;
-- timezone perangkat benar;
-- aplikasi tidak dibatasi battery optimization secara ekstrem;
-- activity memiliki jam mulai atau jam selesai.
+- nama siswa;
+- status activity siswa;
+- waktu check-in siswa;
+- mood check-in siswa;
+- alasan mood check-in;
+- waktu check-out siswa;
+- mood check-out siswa;
+- isi jurnal siswa;
+- ringkasan analisa activity siswa;
+- rekomendasi untuk siswa.
+
+Tujuannya:
+
+- guru mengetahui kondisi siswa setelah aktivitas kelas;
+- guru tidak perlu membuka data mentah satu per satu;
+- guru bisa melihat pola umum kelas;
+- guru dapat memberi dukungan sesuai kebutuhan.
+
+Batasan:
+
+- guru hanya melihat siswa yang join activity kelas miliknya;
+- guru tidak melihat activity pribadi siswa yang tidak terkait kelasnya;
+- guru dari sekolah lain tidak dapat melihat observasi tersebut.
 
 ---
 
-## 17. Alur Dashboard
+## 24. Flow Parent Monitoring
 
-### 17.1 Dashboard Guru
+Parent memantau anak yang sudah terhubung.
 
-Dashboard guru menampilkan:
+Alur:
 
-- ringkasan activity;
-- jumlah planned;
-- jumlah completed;
-- status analisis;
-- shortcut ke activity;
-- shortcut ke analisis;
-- shortcut ke toolkit;
-- shortcut ke profil.
+```text
+Parent login
+  -> membuka menu Anak
+  -> memilih siswa yang terhubung
+  -> memilih tanggal
+  -> melihat daftar activity anak
+  -> melihat mood check-in
+  -> melihat mood check-out
+  -> melihat analisa burnout
+  -> melihat rekomendasi pendampingan
+```
 
-### 17.2 Dashboard Siswa
+Cara menghubungkan anak:
 
-Dashboard siswa menampilkan:
+```text
+Siswa membuka profil
+  -> menyalin kode verifikasi siswa
+  -> memberikan kode ke parent
+  -> parent memasukkan kode dan sekolah anak
+  -> sistem validasi kode dan sekolah
+  -> jika valid, parent terhubung dengan siswa
+```
 
-- ringkasan activity siswa;
-- activity selesai;
-- status kondisi;
-- shortcut activity;
-- shortcut cari kelas;
-- informasi activity kelas jika ada.
+Data yang dilihat parent:
 
-### 17.3 Dashboard Orang Tua
-
-Dashboard orang tua menampilkan:
-
-- daftar anak;
-- aktivitas anak berdasarkan tanggal;
-- check-in mood anak;
-- check-out mood anak;
-- guru terkait;
-- analisis anak;
+- daftar anak terhubung;
+- activity anak per tanggal;
+- guru terkait jika activity berasal dari kelas;
+- mood check-in;
+- mood check-out;
+- hasil analisa anak;
 - rekomendasi pendampingan.
 
+Batasan parent:
+
+- parent tidak membuat activity anak;
+- parent tidak mengedit jurnal anak;
+- parent tidak melihat siswa lain;
+- parent hanya melihat anak yang sudah terhubung.
+
 ---
 
-## 18. Alur Website
+## 25. Flow Reminder dan Notifikasi
 
-Website publik memiliki dua fungsi utama:
+Notifikasi saat ini memakai local notification di aplikasi Flutter.
 
-1. Memperkenalkan aplikasi MindfulEdu.
-2. Menyediakan download APK Android.
+Library:
 
-Alur download:
+| Library | Fungsi |
+|---|---|
+| flutter_local_notifications | Menampilkan dan menjadwalkan notifikasi lokal |
+| timezone | Menjadwalkan berdasarkan timezone |
+| flutter_timezone | Mengambil timezone perangkat |
+
+Jenis reminder:
+
+| Jenis | Waktu |
+|---|---|
+| Reminder harian | Sesuai jam pilihan pengguna |
+| Reminder check-in activity | 10 menit sebelum jam mulai |
+| Reminder check-out activity | Tepat pada jam selesai |
+
+Alur:
 
 ```text
-User membuka landing page
-  -> user klik download
-  -> browser menuju /download/android
-  -> Laravel mencari file APK
-  -> jika file ada, APK diunduh
-  -> jika file tidak ada, server memberi 404
+Pengguna mengaktifkan reminder
+  -> aplikasi meminta izin notifikasi
+  -> aplikasi membaca timezone perangkat
+  -> reminder dijadwalkan secara lokal
+  -> notifikasi muncul sesuai jadwal
 ```
 
-Lokasi file APK:
+Catatan:
+
+- notifikasi bukan push notification server;
+- jika aplikasi dihapus, jadwal lokal hilang;
+- jika permission notifikasi ditolak, reminder tidak tampil;
+- battery optimization Android dapat memengaruhi notifikasi.
+
+---
+
+## 26. Flow Profil dan Password
+
+Setiap pengguna dapat mengelola profil.
+
+Data profil:
+
+- nama;
+- email;
+- sekolah;
+- kelas untuk siswa;
+- avatar;
+- kode parent untuk siswa;
+- riwayat login;
+- pengaturan reminder.
+
+Flow update password di aplikasi:
+
+```text
+Pengguna login
+  -> buka Profil
+  -> buka Update Password
+  -> isi password lama
+  -> isi password baru
+  -> konfirmasi password baru
+  -> submit
+  -> password akun berubah
+```
+
+Flow reset password oleh admin sekolah:
+
+```text
+User lupa password
+  -> user menghubungi admin sekolah
+  -> admin sekolah membuka data user
+  -> admin mengganti password user
+  -> user login memakai password baru
+  -> user dapat mengganti password lagi dari aplikasi
+```
+
+Flow jika admin lupa password:
+
+```text
+Admin sekolah lupa password
+  -> admin memakai fitur lupa password melalui email
+  -> sistem mengirim email reset password
+  -> admin membuat password baru
+  -> admin login kembali
+```
+
+---
+
+## 27. Flow Website Publik
+
+Website publik memiliki beberapa fungsi.
+
+| Halaman | Fungsi |
+|---|---|
+| Landing page | Mengenalkan MindfulEdu |
+| Register School | Form pendaftaran sekolah |
+| Download Android | Mengunduh APK terbaru |
+| Admin Login | Masuk dashboard Filament |
+
+Endpoint penting:
+
+```text
+GET  /
+GET  /register-school
+POST /register-school
+GET  /download/android
+GET  /admin
+```
+
+Download APK membaca file dari:
 
 ```text
 src/public/downloads/mindfuledu.apk
 ```
 
----
-
-## 19. Alur Admin Panel
-
-Admin panel digunakan pengelola sistem.
-
-Fungsi admin:
-
-- melihat user;
-- melihat role dan permission;
-- mengelola class/sekolah;
-- melihat activity;
-- melihat ledger activity;
-- melihat burnout analysis snapshot;
-- melihat mindful tactics;
-- melihat mindfulness sessions;
-- melihat student observation;
-- melihat badge;
-- melihat login history;
-- monitoring kondisi platform.
-
-Admin panel tidak digunakan oleh user umum.
+Jika file tidak ada, endpoint download akan mengembalikan `404`.
 
 ---
 
-## 20. Endpoint API Utama
+## 28. API Utama Mobile
 
 Base path:
 
@@ -1121,19 +1099,35 @@ Base path:
 /api
 ```
 
-### 20.1 Auth
+Endpoint public:
+
+| Method | Endpoint | Fungsi |
+|---|---|---|
+| GET | /public/schools | List sekolah approved |
+| GET | /public/schools/{school}/classes | List kelas sekolah |
+
+Endpoint auth:
 
 | Method | Endpoint | Fungsi |
 |---|---|---|
 | POST | /register | Register email |
+| POST | /register/google | Register Google dengan password |
 | POST | /login | Login email |
-| POST | /auth/google | Login/register Google |
+| POST | /auth/google | Login Google |
 | POST | /logout | Logout |
 | GET | /me | Ambil profil |
 | PUT | /me/profile | Update profil |
 | POST | /me/avatar | Upload avatar |
+| PUT | /me/password | Update password aplikasi |
 
-### 20.2 Activity
+Endpoint reminder:
+
+| Method | Endpoint | Fungsi |
+|---|---|---|
+| GET | /reminder-preference | Ambil preferensi reminder |
+| PUT | /reminder-preference | Update preferensi reminder |
+
+Endpoint activity:
 
 | Method | Endpoint | Fungsi |
 |---|---|---|
@@ -1142,29 +1136,29 @@ Base path:
 | GET | /activities/{activity} | Detail activity |
 | PUT | /activities/{activity} | Update activity |
 | POST | /activities/{activity}/check-in | Check-in |
-| POST | /activities/{activity}/check-out | Check-out dan jurnal |
+| POST | /activities/{activity}/check-out | Check-out |
 | POST | /activities/{activity}/cancel | Cancel activity |
 | POST | /activities/{activity}/duplicate | Duplicate activity |
-| GET | /activities/{activity}/ledger | Ledger activity |
+| GET | /activities/{activity}/ledger | Riwayat event activity |
 
-### 20.3 Classroom
+Endpoint classroom:
 
 | Method | Endpoint | Role | Fungsi |
 |---|---|---|---|
-| GET | /classroom/activities/available | Siswa | Cari activity kelas |
+| GET | /classroom/activities/available | Siswa | Activity kelas tersedia |
 | POST | /classroom/activities/{activity}/join | Siswa | Join activity kelas |
 | GET | /teacher/classroom-activities/{activity}/observations | Guru | Observasi siswa |
 
-### 20.4 Analysis
+Endpoint analisa:
 
 | Method | Endpoint | Fungsi |
 |---|---|---|
-| GET | /burnout-analyses | History analisis |
-| GET | /burnout-analyses/overview | Overview analisis |
-| POST | /burnout-analyses | Jalankan analisis |
+| GET | /burnout-analyses | List history analisa |
+| GET | /burnout-analyses/overview | Ringkasan analisa |
+| POST | /burnout-analyses | Jalankan analisa |
 | POST | /burnout-self-reports | Simpan self report |
 
-### 20.5 Toolkit
+Endpoint toolkit:
 
 | Method | Endpoint | Fungsi |
 |---|---|---|
@@ -1172,253 +1166,265 @@ Base path:
 | GET | /toolkit/tactics/bookmarked | List bookmark |
 | POST | /toolkit/tactics/{tactic}/bookmark | Toggle bookmark |
 
-### 20.6 Parent
+Endpoint parent:
 
 | Method | Endpoint | Fungsi |
 |---|---|---|
 | GET | /parent/dashboard | Dashboard parent |
 | POST | /parent/children | Hubungkan anak |
 
-### 20.7 Reminder
+---
 
-| Method | Endpoint | Fungsi |
+## 29. Struktur Data Utama
+
+Tabel utama:
+
+| Tabel | Fungsi |
+|---|---|
+| schools | Data sekolah dan status approval |
+| users | Data akun semua role |
+| classes | Data kelas sekolah |
+| class_teacher | Relasi guru dengan kelas |
+| activities | Data activity, check-in, check-out, jurnal |
+| activity_events | Ledger perubahan activity |
+| burnout_analysis_snapshots | History hasil analisa |
+| burnout_self_reports | Self report pengguna |
+| mindful_tactics | Daftar teknik mindfulness |
+| tactic_bookmarks | Bookmark teknik user |
+| mindfulness_sessions | Riwayat latihan mindfulness |
+| parent_student_links | Relasi parent dan siswa |
+| user_login_histories | Riwayat login |
+| badges | Data badge |
+| user_badges | Badge milik user |
+| student_observations | Data observasi siswa |
+
+Relasi inti:
+
+```text
+School
+  -> has many Users
+  -> has many Classes
+  -> has many Activities
+
+User
+  -> belongs to School
+  -> may belong to Class
+  -> has many Activities
+  -> has many Burnout Analysis Snapshots
+  -> has many Mindfulness Sessions
+
+Teacher Activity
+  -> may have target Class
+  -> has many Student Joined Activities
+
+Parent
+  -> links to Student through parent_student_links
+```
+
+---
+
+## 30. Data Seeder Untuk Testing
+
+Seeder menyediakan akun testing.
+
+Password default:
+
+```text
+password
+```
+
+Super admin:
+
+| Role | Email |
+|---|---|
+| Super Admin | admin@admin.com |
+
+Admin sekolah:
+
+| Sekolah | Email |
+|---|---|
+| SDN Contoh 1 | admin@sdncontoh1.test |
+| SDN Contoh 2 | admin@sdncontoh2.test |
+
+Contoh guru:
+
+| Nama | Email | Sekolah | Kelas |
+|---|---|---|---|
+| Bu Sari | guru@mindfuledu.test | SDN Contoh 1 | 5A |
+| Pak Bima | guru.bima@mindfuledu.test | SDN Contoh 1 | 5B |
+| Bu Rani | guru.rani@mindfuledu.test | SDN Contoh 2 | 6A |
+
+Contoh siswa:
+
+| Nama | Email | Sekolah | Kelas |
+|---|---|---|---|
+| Ani | siswa@mindfuledu.test | SDN Contoh 1 | 5A |
+| Budi | budi@mindfuledu.test | SDN Contoh 1 | 5A |
+| Citra | citra@mindfuledu.test | SDN Contoh 1 | 5A |
+| Dewi | dewi@mindfuledu.test | SDN Contoh 1 | 5B |
+| Eko | eko@mindfuledu.test | SDN Contoh 1 | 5B |
+| Farah | farah@mindfuledu.test | SDN Contoh 2 | 6A |
+| Gilang | gilang@mindfuledu.test | SDN Contoh 2 | 6A |
+
+Contoh parent:
+
+| Nama | Email | Terhubung ke |
 |---|---|---|
-| GET | /reminder-preference | Ambil preferensi reminder |
-| PUT | /reminder-preference | Update preferensi reminder |
+| Parent Demo | parent@mindfuledu.test | Ani |
 
 ---
 
-## 21. Alur Data Database Utama
+## 31. Contoh Flow Lengkap Sekolah Baru
 
-### 21.1 User dan Role
-
-```text
-users
-  -> model_has_roles
-  -> roles
-```
-
-User menyimpan profil dasar. Role menentukan akses guru, siswa, atau parent.
-
-### 21.2 Siswa dan Kelas
+Contoh dari awal sampai pengguna memakai aplikasi:
 
 ```text
-users.class_id
-  -> classes.id
+1. SDN Contoh 1 daftar sekolah di website.
+2. Super admin membuka dashboard dan approve sekolah.
+3. Super admin membuat admin sekolah untuk SDN Contoh 1.
+4. Admin sekolah login.
+5. Admin sekolah membuat kelas 5A dan 5B.
+6. Guru register di aplikasi dan memilih SDN Contoh 1.
+7. Siswa register di aplikasi dan memilih SDN Contoh 1 serta kelas 5A.
+8. Admin sekolah approve akun guru dan siswa.
+9. Guru login ke aplikasi.
+10. Guru membuat activity Mengajar Matematika untuk kelas 5A.
+11. Siswa login dan melihat activity kelas tersedia.
+12. Siswa join activity Mengajar Matematika.
+13. Guru check-in saat kelas dimulai.
+14. Siswa check-in setelah guru check-in.
+15. Guru check-out saat kelas selesai.
+16. Siswa check-out dan mengisi jurnal.
+17. Sistem membuat review dan analisa.
+18. Guru melihat observasi siswa.
+19. Siswa melihat hasil analisa dan rekomendasi.
+20. Siswa menjalankan latihan mindfulness dari Toolkit.
+21. Parent menghubungkan akun anak memakai kode siswa.
+22. Parent melihat activity, mood, analisa, dan rekomendasi pendampingan anak.
+23. Admin sekolah memantau data sekolah melalui dashboard.
+24. Super admin tetap bisa memantau seluruh sekolah.
 ```
-
-Siswa dapat memiliki kelas. Kelas dipakai untuk filter activity mengajar.
-
-### 21.3 Parent dan Anak
-
-```text
-parent_student_links.parent_id
-  -> users.id parent
-
-parent_student_links.student_id
-  -> users.id student
-```
-
-Relasi dibuat setelah kode siswa dan sekolah valid.
-
-### 21.4 Activity dan Ledger
-
-```text
-activities
-  -> activity_events
-```
-
-Activity menyimpan data utama. Activity events menyimpan riwayat tindakan.
-
-### 21.5 Activity Guru dan Activity Siswa
-
-```text
-activities.id guru classroom
-  -> activities.teacher_activity_id siswa classroom_student
-```
-
-Activity siswa hasil join selalu mengarah ke activity guru.
-
-### 21.6 Analisis
-
-```text
-activities + journals
-  -> burnout_analysis_snapshots
-```
-
-Snapshot menyimpan hasil analisis berdasarkan periode.
-
-### 21.7 Toolkit
-
-```text
-mindful_tactics
-  -> tactic_bookmarks
-  -> mindfulness_sessions
-```
-
-Mindful tactics menyimpan teknik. Bookmark dan session menyimpan interaksi user dengan teknik.
 
 ---
 
-## 22. Workflow Lengkap Per Role
+## 32. Checklist QA Flow Sistem
 
-### 22.1 Workflow Guru
+Gunakan checklist ini setelah update.
 
-```text
-Guru register/login
-  -> lengkapi profil sekolah
-  -> buat activity
-  -> jika mengajar, pilih target kelas atau kosongkan
-  -> check-in sebelum activity
-  -> siswa mulai bisa check-in jika activity kelas
-  -> guru menjalankan activity
-  -> guru check-out dan menulis jurnal
-  -> siswa mulai bisa check-out jika activity kelas
-  -> sistem review jurnal guru
-  -> sistem analisis burnout guru
-  -> guru melihat rekomendasi teknik
-  -> guru membuka toolkit
-  -> guru melihat observasi siswa jika activity kelas
-```
+### Sekolah dan Admin
 
-Output guru:
+- Sekolah bisa daftar dari website.
+- Pendaftaran sekolah masuk sebagai pending.
+- Super admin bisa approve sekolah.
+- Super admin bisa membuat admin sekolah.
+- Admin sekolah hanya melihat sekolahnya sendiri.
+- Admin sekolah bisa membuat kelas.
 
-- daftar activity;
-- jurnal per activity;
-- review activity;
-- status burnout;
-- rekomendasi teknik mindfulness;
-- observasi siswa;
-- history analisis.
+### Register dan Approval
 
-### 22.2 Workflow Siswa
+- Guru register email dengan sekolah.
+- Siswa register email dengan sekolah dan kelas.
+- Register Google tetap meminta password.
+- Setelah register guru/siswa, aplikasi kembali ke login.
+- Guru/siswa pending tidak bisa login.
+- Admin sekolah bisa approve guru/siswa.
+- Guru/siswa approved bisa login.
+- Role mismatch ditolak.
 
-```text
-Siswa register/login
-  -> lengkapi profil sekolah dan kelas
-  -> buat activity pribadi atau cari kelas guru
-  -> join activity kelas
-  -> menunggu guru check-in jika activity kelas
-  -> check-in
-  -> mengikuti activity
-  -> menunggu guru check-out jika activity kelas
-  -> check-out dan menulis jurnal
-  -> sistem review jurnal siswa
-  -> sistem analisis burnout siswa
-  -> siswa mendapat rekomendasi teknik
-  -> siswa membuka toolkit
-  -> siswa membagikan kode parent jika perlu
-```
+### Activity
 
-Output siswa:
+- Guru bisa membuat activity personal.
+- Guru bisa membuat activity mengajar.
+- Target kelas membatasi siswa yang bisa join.
+- Siswa bisa membuat activity pribadi.
+- Siswa bisa melihat activity kelas yang sesuai.
+- Siswa bisa join activity kelas.
+- Edit activity memperbarui card lama.
+- Cancel activity tidak meninggalkan data stale di UI.
 
-- daftar activity pribadi;
-- daftar activity kelas yang diikuti;
-- jurnal siswa;
-- review activity;
-- status burnout siswa;
-- rekomendasi teknik mindfulness;
-- kode parent;
-- history analisis.
+### Check-In dan Check-Out
 
-### 22.3 Workflow Orang Tua
+- Guru bisa check-in.
+- Siswa tidak bisa check-in sebelum guru check-in.
+- Siswa bisa check-in setelah guru check-in.
+- Guru bisa check-out.
+- Siswa tidak bisa check-out sebelum guru check-out.
+- Siswa bisa check-out setelah guru check-out.
+- Jurnal check-out tersimpan.
 
-```text
-Parent register/login
-  -> masukkan kode siswa dan sekolah
-  -> sistem menghubungkan parent dengan siswa
-  -> parent membuka dashboard anak
-  -> parent memilih tanggal
-  -> parent melihat activity anak
-  -> parent melihat mood check-in/check-out anak
-  -> parent membaca analisis anak
-  -> parent melihat rekomendasi pendampingan
-```
+### Analisa dan Rekomendasi
 
-Output parent:
+- Review activity muncul setelah check-out.
+- Analisa harian berjalan.
+- Analisa mingguan berjalan.
+- Analisa bulanan berjalan.
+- Snapshot tersimpan.
+- Rekomendasi mindfulness muncul.
+- Tombol rekomendasi membuka teknik yang sesuai.
 
-- daftar anak terhubung;
-- aktivitas anak;
-- check-in/check-out anak;
-- hasil analisis anak;
-- rekomendasi pendampingan.
+### Guru dan Observasi
 
----
+- Guru bisa membuka observasi siswa pada activity kelas.
+- Mood check-in siswa tampil.
+- Alasan check-in siswa tampil.
+- Mood check-out siswa tampil.
+- Jurnal siswa tampil.
+- Ringkasan analisa dan rekomendasi tampil.
 
-## 23. Kondisi Penting dan Aturan Sistem
+### Parent
 
-### 23.1 Role Tidak Boleh Tertukar
+- Siswa dapat melihat kode parent.
+- Parent bisa menghubungkan anak dengan kode dan sekolah yang benar.
+- Parent tidak bisa menghubungkan anak dari sekolah yang salah.
+- Parent melihat activity anak.
+- Parent melihat mood check-in/check-out anak.
+- Parent melihat analisa burnout anak.
+- Parent melihat rekomendasi pendampingan.
 
-Setiap akun hanya boleh masuk melalui role yang sesuai.
+### Toolkit dan Reminder
 
-### 23.2 Siswa Harus Satu Sekolah
-
-Activity kelas hanya dapat diakses siswa dari sekolah yang sama dengan guru.
-
-### 23.3 Target Kelas Membatasi Activity
-
-Jika guru mengisi target kelas, hanya siswa dari kelas tersebut yang dapat join.
-
-### 23.4 Guru Mengontrol Waktu Check-In/Check-Out Kelas
-
-Untuk activity kelas:
-
-- siswa tidak bisa check-in sebelum guru check-in;
-- siswa tidak bisa check-out sebelum guru check-out.
-
-### 23.5 Activity Completed Menjadi Sumber Analisis Utama
-
-Activity yang sudah check-out memiliki jurnal dan lebih kuat untuk dianalisis.
-
-### 23.6 Snapshot Mencegah AI Berjalan Berulang
-
-Jika data tidak berubah, analisis lama bisa digunakan ulang.
-
-### 23.7 Reminder Berjalan di Perangkat
-
-Notifikasi jadwal activity dan reminder harian dijalankan oleh mobile app, bukan server push.
+- Semua teknik mindfulness tampil.
+- Guided practice berjalan step-by-step.
+- TTS membacakan instruksi.
+- Evaluasi setelah latihan tersimpan.
+- Reminder harian muncul.
+- Reminder check-in muncul 10 menit sebelum activity.
+- Reminder check-out muncul tepat saat jam selesai.
 
 ---
 
-## 24. Ringkasan Output Sistem
+## 33. Ringkasan Fungsi Semua Sistem
 
-MindfulEdu menghasilkan beberapa output utama:
-
-| Output | Sumber | Dilihat Oleh |
-|---|---|---|
-| Activity list | Input user | Guru, siswa |
-| Check-in mood | Form check-in | Guru, siswa, parent untuk anak |
-| Check-out journal | Form check-out | Guru, siswa, parent untuk anak |
-| Review activity | Jurnal dan AI/fallback | Guru, siswa |
-| Observasi siswa | Activity kelas | Guru |
-| Analisis burnout | Activity dan jurnal | Guru, siswa, parent untuk anak |
-| Rekomendasi teknik | Analisis dan toolkit | Guru, siswa, parent sebagai saran |
-| Guided practice | Toolkit | Guru, siswa |
-| Login history | Auth | Semua role di profil |
-| APK download | Website | Publik |
-
----
-
-## 25. Ringkasan Akhir
-
-MindfulEdu berjalan dengan alur:
+MindfulEdu menjalankan siklus berikut:
 
 ```text
-Role-based access
+Daftarkan sekolah
+  -> approve sekolah
+  -> buat admin sekolah
+  -> kelola kelas
+  -> register guru/siswa/parent
+  -> approve guru/siswa
+  -> login role-based
   -> activity tracking
-  -> mood check-in
-  -> reflective check-out journal
-  -> journal review
-  -> burnout analysis
-  -> mindfulness recommendation
-  -> guided mindfulness practice
-  -> evaluation and history
+  -> check-in mood
+  -> check-out jurnal
+  -> review activity
+  -> analisa burnout
+  -> rekomendasi mindfulness
+  -> guided practice
+  -> evaluasi latihan
+  -> observasi siswa
+  -> parent monitoring
+  -> admin monitoring
 ```
 
-Guru menggunakan sistem untuk memahami kondisi diri dan melihat observasi siswa.
+Dengan flow ini, sistem membantu:
 
-Siswa menggunakan sistem untuk memahami kondisi belajar, emosi, dan kebutuhan pemulihan.
+- sekolah mengelola akses pengguna;
+- guru memantau aktivitas dan kondisi diri serta siswa;
+- siswa memahami kondisi belajar dan emosinya;
+- parent memantau anak secara terbatas dan relevan;
+- admin sekolah menjaga data sekolah tetap rapi;
+- super admin menjaga keseluruhan ekosistem tetap terkontrol.
 
-Orang tua menggunakan sistem untuk memantau perkembangan anak dan memberi dukungan yang lebih tepat.
-
-Laravel menjadi pusat pengelolaan data, Flutter menjadi aplikasi pengguna, Python/FastAPI menjadi pendukung analisis dan rekomendasi, dan website menjadi pintu publik untuk pengenalan aplikasi serta download APK.
+MindfulEdu berperan sebagai sistem pendamping untuk refleksi, pemantauan, dan rekomendasi pemulihan berbasis mindfulness.

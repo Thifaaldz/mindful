@@ -10,21 +10,12 @@ class BurnoutAnalysisSnapshotPolicy
 {
     use HandlesAuthorization;
 
-    public function before(User $user, string $ability): ?bool
-    {
-        if ($user->hasRole(['super_admin', 'admin', 'school_admin'])) {
-            return true;
-        }
-
-        return null;
-    }
-
     /**
      * Determine whether the user can view any models.
      */
     public function viewAny(User $user): bool
     {
-        return $user->can('view_any_burnout::analysis::snapshot');
+        return $user->can('view_any_teacher::burnout::analysis::snapshot');
     }
 
     /**
@@ -32,7 +23,7 @@ class BurnoutAnalysisSnapshotPolicy
      */
     public function view(User $user, BurnoutAnalysisSnapshot $burnoutAnalysisSnapshot): bool
     {
-        return $user->can('view_burnout::analysis::snapshot');
+        return $user->can('view_teacher::burnout::analysis::snapshot');
     }
 
     /**
@@ -40,7 +31,7 @@ class BurnoutAnalysisSnapshotPolicy
      */
     public function create(User $user): bool
     {
-        return $user->can('create_burnout::analysis::snapshot');
+        return $user->can('create_teacher::burnout::analysis::snapshot');
     }
 
     /**
@@ -48,7 +39,7 @@ class BurnoutAnalysisSnapshotPolicy
      */
     public function update(User $user, BurnoutAnalysisSnapshot $burnoutAnalysisSnapshot): bool
     {
-        return $user->can('update_burnout::analysis::snapshot');
+        return $user->can('update_teacher::burnout::analysis::snapshot');
     }
 
     /**
@@ -56,7 +47,7 @@ class BurnoutAnalysisSnapshotPolicy
      */
     public function delete(User $user, BurnoutAnalysisSnapshot $burnoutAnalysisSnapshot): bool
     {
-        return $user->can('delete_burnout::analysis::snapshot');
+        return $user->can('delete_teacher::burnout::analysis::snapshot');
     }
 
     /**
@@ -64,7 +55,7 @@ class BurnoutAnalysisSnapshotPolicy
      */
     public function deleteAny(User $user): bool
     {
-        return $user->can('delete_any_burnout::analysis::snapshot');
+        return $user->can('delete_any_teacher::burnout::analysis::snapshot');
     }
 
     /**

@@ -6,6 +6,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 
 import '../../core/app_theme.dart';
 import '../../widgets/app_chrome.dart';
+import '../../widgets/mindful_avatar.dart';
 
 class KabatZinnPracticeScreen extends StatefulWidget {
   const KabatZinnPracticeScreen({super.key, required this.snapshot});
@@ -388,14 +389,19 @@ class _AnimatedPractice extends StatelessWidget {
               SizedBox(
                 height: 210,
                 child: Center(
-                  child: isBodyScan
-                      ? _BodyScanFigure(activeStep: activeStep)
-                      : _PersonPracticeFigure(
-                          value: pulse,
-                          icon: method.icon,
-                          kind: method.kind,
-                          activeStep: activeStep,
-                        ),
+                  child: _StepAssetFigure(
+                    method: method,
+                    activeStep: activeStep,
+                    pulse: pulse,
+                    fallback: isBodyScan
+                        ? _BodyScanFigure(activeStep: activeStep)
+                        : _PersonPracticeFigure(
+                            value: pulse,
+                            icon: method.icon,
+                            kind: method.kind,
+                            activeStep: activeStep,
+                          ),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -408,6 +414,34 @@ class _AnimatedPractice extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class _StepAssetFigure extends StatelessWidget {
+  const _StepAssetFigure({
+    required this.method,
+    required this.activeStep,
+    required this.pulse,
+    required this.fallback,
+  });
+
+  final _PracticeMethod method;
+  final int activeStep;
+  final double pulse;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    final assetName = _mindfulnessStepAsset(method, activeStep);
+
+    if (assetName == null) {
+      return fallback;
+    }
+
+    return Transform.scale(
+      scale: 0.98 + pulse * 0.025,
+      child: MindfulAvatar(assetName: assetName, size: 210, icon: method.icon),
     );
   }
 }
@@ -972,6 +1006,7 @@ class _PracticeMethod {
     required this.reason,
     required this.knowledge,
     required this.steps,
+    this.assetKey,
   });
 
   final String title;
@@ -981,6 +1016,7 @@ class _PracticeMethod {
   final String reason;
   final String knowledge;
   final List<String> steps;
+  final String? assetKey;
 
   _PracticeMethod copyWith({
     String? title,
@@ -990,6 +1026,7 @@ class _PracticeMethod {
     String? reason,
     String? knowledge,
     List<String>? steps,
+    String? assetKey,
   }) {
     return _PracticeMethod(
       title: title ?? this.title,
@@ -999,6 +1036,7 @@ class _PracticeMethod {
       reason: reason ?? this.reason,
       knowledge: knowledge ?? this.knowledge,
       steps: steps ?? this.steps,
+      assetKey: assetKey ?? this.assetKey,
     );
   }
 
@@ -1155,7 +1193,8 @@ List<int> _buildStepDurations(_PracticeMethod method) {
 }
 
 _PracticeMethod _methodFromTactic(Map<String, dynamic> tactic) {
-  final fallback = _methodForCode('${tactic['category'] ?? ''}');
+  final code = '${tactic['category'] ?? ''}';
+  final fallback = _methodForCode(code);
   final steps = _stringList(tactic['steps']);
 
   return fallback.copyWith(
@@ -1169,11 +1208,14 @@ _PracticeMethod _methodFromTactic(Map<String, dynamic> tactic) {
     reason: _textValue(tactic['description'], fallback.reason),
     knowledge: _textValue(tactic['knowledge'], fallback.knowledge),
     steps: steps.isEmpty ? fallback.steps : steps,
+    assetKey: _assetKeyForCode(code),
   );
 }
 
 _PracticeMethod _methodForCode(String code) {
   return switch (code) {
+    'mindful_breathing' => _breathing(5),
+    'focused_attention' => _focusedAttention(),
     'stop_technique' => _stop(),
     'grounding_321' => _grounding(),
     'breathing_478' => _breathing478(),
@@ -1184,8 +1226,12 @@ _PracticeMethod _methodForCode(String code) {
     'body_scan_full' => _bodyScan(20, high: true),
     'mindful_movement' => _movement(10),
     'walking_meditation' => _walking(5),
+    'open_monitoring' => _openMonitoring(),
+    'mindfulness_of_sounds' => _sounds(),
     'rain_self_compassion' => _rain(),
     'loving_kindness' => _kindness(7),
+    'mountain_meditation' => _mountain(),
+    'informal_mindfulness' => _informal(3),
     'reflective_journal' => _journal(),
     _ => _breathing(3),
   };
@@ -1201,12 +1247,32 @@ _PracticeMethod _breathing(int minutes) {
         'Cocok untuk burnout rendah atau saat butuh menjaga fokus sebelum aktivitas berikutnya.',
     knowledge:
         'Latihan napas sadar membantu perhatian kembali ke tubuh. Tujuannya bukan mengosongkan pikiran, tetapi menyadari napas lalu kembali dengan lembut saat terdistraksi.',
+    assetKey: 'mindful_breathing',
     steps: const [
-      'Duduk nyaman dan biarkan bahu lebih rileks.',
-      'Perhatikan napas masuk secara alami.',
-      'Perhatikan napas keluar secara alami.',
-      'Saat pikiran berpindah, sadari lalu kembali ke napas.',
-      'Akhiri dengan satu niat baik untuk aktivitas berikutnya.',
+      'Duduk atau berdiri dengan nyaman dan lepaskan ketegangan yang tidak perlu.',
+      'Perhatikan napas masuk dan napas keluar sebagaimana adanya.',
+      'Jika perhatian berpindah, sadari lalu kembali perlahan pada napas.',
+      'Akhiri dengan menyadari tubuh dan lingkungan.',
+    ],
+  );
+}
+
+_PracticeMethod _focusedAttention() {
+  return _PracticeMethod(
+    title: 'Focused Attention Meditation',
+    duration: const Duration(minutes: 5),
+    kind: _PracticeKind.breathing,
+    icon: Icons.center_focus_strong,
+    reason:
+        'Cocok ketika perhatian mudah terdistraksi dan pengguna ingin melatih kembali ke satu fokus.',
+    knowledge:
+        'Focused Attention melatih kemampuan mempertahankan perhatian pada satu anchor. Saat perhatian berpindah, pengguna cukup menyadari lalu kembali dengan lembut.',
+    assetKey: 'focused_attention',
+    steps: const [
+      'Pilih satu anchor, misalnya sensasi napas di ujung hidung.',
+      'Pertahankan perhatian pada anchor tanpa mengejar pikiran lain.',
+      'Saat perhatian berpindah, beri label sederhana lalu kembali ke anchor.',
+      'Tutup dengan menyadari seluruh tubuh dan lingkungan.',
     ],
   );
 }
@@ -1260,11 +1326,20 @@ _PracticeMethod _informal(int minutes) {
         'Cocok saat kondisi masih terkendali dan latihan ingin dibuat ringan dalam aktivitas sehari-hari.',
     knowledge:
         'Informal mindfulness membawa perhatian penuh ke aktivitas sederhana. Ini berguna ketika pengguna tidak punya banyak waktu tetapi tetap butuh kembali hadir.',
+    assetKey: 'informal_mindfulness',
     steps: const [
-      'Pilih aktivitas sederhana seperti minum, duduk, atau berjalan.',
-      'Turunkan tempo dan lepaskan dorongan membuka ponsel.',
-      'Sadari napas, gerak tubuh, dan lingkungan sekitar.',
-      'Kembali ke aktivitas dengan perhatian yang lebih utuh.',
+      'Pegang gelas dan sadari suhu pada tangan.',
+      'Perhatikan warna dan aroma minuman.',
+      'Minum perlahan dengan perhatian penuh.',
+      'Sadari sensasi setelah menelan.',
+      'Perhatikan warna, bentuk, dan aroma makanan.',
+      'Ambil satu suapan secara sadar.',
+      'Kunyah perlahan tanpa terburu-buru.',
+      'Sadari rasa dan tekstur makanan.',
+      'Sadari kondisi tubuh setelah makan.',
+      'Saat berjalan ke kelas, sadari langkah kaki.',
+      'Sadari napas selama berjalan.',
+      'Sadari lingkungan sekitar tanpa membuka ponsel jika memungkinkan.',
     ],
   );
 }
@@ -1279,12 +1354,15 @@ _PracticeMethod _walking(int minutes) {
         'Cocok setelah aktivitas berat, terlalu lama duduk, atau saat butuh jeda aktif.',
     knowledge:
         'Walking meditation memakai langkah sebagai jangkar perhatian. Latihan ini membantu tubuh bergerak pelan tanpa kehilangan kesadaran pada napas dan lingkungan.',
+    assetKey: 'walking_meditation',
     steps: const [
-      'Berdiri dan pilih jalur pendek yang aman.',
-      'Berjalan perlahan sambil merasakan telapak kaki.',
-      'Sadari gerakan tubuh dan napas.',
-      'Perhatikan lingkungan tanpa buru-buru menilai.',
-      'Berhenti sejenak sebelum kembali bekerja.',
+      'Berdiri dan sadari kontak kaki dengan lantai.',
+      'Mulai berjalan perlahan di jalur yang aman.',
+      'Sadari gerakan angkat, gerak, dan sentuh pada kaki.',
+      'Sadari gerakan seluruh tubuh saat berjalan.',
+      'Hubungkan napas dengan langkah.',
+      'Sadari lingkungan sekitar tanpa terburu-buru menilai.',
+      'Perlambat langkah, berhenti, lalu tutup sesi.',
     ],
   );
 }
@@ -1300,13 +1378,18 @@ _PracticeMethod _bodyScan(int minutes, {bool high = false}) {
         : 'Direkomendasikan saat burnout sedang untuk membaca ketegangan tubuh dan memberi jeda pemulihan.',
     knowledge:
         'Body scan membantu membaca sinyal tubuh yang sering terlewat saat aktivitas padat. Pengguna diajak mengenali sensasi tanpa menghakimi atau memaksa tubuh cepat rileks.',
+    assetKey: 'body_scan',
     steps: const [
-      'Cari posisi duduk atau berbaring yang nyaman.',
-      'Mulai dari napas dan biarkan tubuh menetap.',
-      'Sadari kepala, wajah, leher, dan bahu.',
-      'Sadari tangan, dada, perut, dan pinggang.',
-      'Sadari kaki lalu tubuh secara keseluruhan.',
-      'Biarkan sensasi hadir tanpa harus langsung bereaksi.',
+      'Duduk atau berbaring nyaman dan sadari beberapa napas.',
+      'Sadari telapak kaki, jari kaki, suhu, dan berat tubuh.',
+      'Sadari betis, lutut, dan paha.',
+      'Sadari panggul dan punggung bawah.',
+      'Sadari gerakan perut saat bernapas.',
+      'Sadari naik turunnya dada.',
+      'Sadari jari, telapak, pergelangan, dan lengan.',
+      'Sadari bahu dan leher tanpa memaksa tegang hilang.',
+      'Sadari rahang, pipi, mata, dahi, dan kepala.',
+      'Sadari tubuh sebagai satu kesatuan dan kembali ke napas.',
     ],
   );
 }
@@ -1321,12 +1404,15 @@ _PracticeMethod _sitting(int minutes) {
         'Cocok ketika stres, banyak pikiran, atau rasa kewalahan mulai meningkat.',
     knowledge:
         'Sitting meditation melatih pengguna menyadari napas, suara, tubuh, pikiran, dan emosi. Latihan ini menguatkan sikap menerima pengalaman tanpa langsung bereaksi.',
+    assetKey: 'sitting_meditation',
     steps: const [
-      'Duduk stabil dengan punggung nyaman.',
+      'Duduk nyaman dengan punggung tegak tetapi tidak kaku.',
       'Letakkan perhatian pada napas.',
-      'Sadari tubuh, suara, pikiran, dan emosi yang muncul.',
-      'Jika perhatian berpindah, kembali pada napas.',
-      'Akhiri dengan sikap lembut pada diri sendiri.',
+      'Sadari tekanan kursi, kaki, tangan, dan bahu.',
+      'Dengarkan suara tanpa menilai.',
+      'Sadari pikiran yang muncul tanpa mengikuti ceritanya.',
+      'Sadari emosi yang hadir.',
+      'Kembali ke napas dan lingkungan.',
     ],
   );
 }
@@ -1341,11 +1427,15 @@ _PracticeMethod _movement(int minutes) {
         'Cocok saat jurnal menunjukkan usaha tinggi, badan pegal, atau duduk terlalu lama.',
     knowledge:
         'Mindful movement adalah peregangan ringan yang dilakukan pelan. Fokusnya bukan performa, tetapi merasakan gerak, napas, dan batas nyaman tubuh.',
+    assetKey: 'mindful_movement',
     steps: const [
       'Berdiri atau duduk dengan ruang gerak yang aman.',
-      'Gerakkan bahu, leher, tangan, dan punggung perlahan.',
-      'Sinkronkan gerakan dengan napas.',
-      'Berhenti bila ada rasa tidak nyaman.',
+      'Naikkan dan turunkan bahu perlahan.',
+      'Putar bahu jika terasa nyaman.',
+      'Angkat tangan perlahan tanpa memaksa.',
+      'Gerakkan leher perlahan ke kanan dan kiri.',
+      'Sadari punggung atas saat bergerak.',
+      'Sadari pinggang dan kaki dengan gerakan ringan.',
       'Rasakan tubuh sebelum melanjutkan aktivitas.',
     ],
   );
@@ -1361,12 +1451,78 @@ _PracticeMethod _kindness(int minutes) {
         'Cocok saat tekanan emosional tinggi, frustrasi, konflik, atau merasa terbebani.',
     knowledge:
         'Loving-kindness membantu melatih kalimat baik untuk diri sendiri dan orang lain. Latihan ini berguna saat pengguna keras pada diri sendiri atau merasa gagal.',
+    assetKey: 'loving_kindness',
     steps: const [
-      'Duduk nyaman dan sadari napas.',
+      'Stabilkan diri dengan napas dan posisi tubuh.',
       'Arahkan kalimat baik kepada diri sendiri.',
-      'Akui beban yang sedang terasa tanpa menghakimi.',
-      'Luaskan niat baik pada orang lain bila siap.',
-      'Tutup dengan satu tindakan kecil yang menenangkan.',
+      'Arahkan niat baik kepada orang yang dipercaya.',
+      'Perluas kebaikan kepada orang lain jika nyaman.',
+      'Kembali ke napas dan tubuh untuk menutup sesi.',
+    ],
+  );
+}
+
+_PracticeMethod _openMonitoring() {
+  return _PracticeMethod(
+    title: 'Open Monitoring',
+    duration: const Duration(minutes: 10),
+    kind: _PracticeKind.grounding,
+    icon: Icons.visibility_outlined,
+    reason:
+        'Cocok ketika pikiran ramai, emosi bercampur, atau pengguna merasa kewalahan.',
+    knowledge:
+        'Open Monitoring membantu pengguna mengamati pengalaman yang muncul tanpa memilih, mengejar, atau langsung bereaksi.',
+    assetKey: 'open_monitoring',
+    steps: const [
+      'Stabilkan diri melalui napas.',
+      'Buka awareness ke tubuh.',
+      'Sadari suara yang muncul.',
+      'Sadari pikiran dan emosi tanpa mengejar atau menolak.',
+      'Biarkan pengalaman datang dan pergi dalam kesadaran terbuka.',
+      'Kembali ke napas untuk menutup sesi.',
+    ],
+  );
+}
+
+_PracticeMethod _sounds() {
+  return _PracticeMethod(
+    title: 'Mindfulness of Sounds',
+    duration: const Duration(minutes: 5),
+    kind: _PracticeKind.grounding,
+    icon: Icons.hearing_outlined,
+    reason:
+        'Cocok sebagai grounding ringan ketika pengguna kurang nyaman fokus pada napas.',
+    knowledge:
+        'Mindfulness of Sounds memakai suara sebagai anchor perhatian. Pengguna mendengar suara tanpa memberi label baik, buruk, atau mengganggu.',
+    assetKey: 'sounds',
+    steps: const [
+      'Siapkan posisi yang nyaman.',
+      'Dengarkan suara dekat tanpa menilai.',
+      'Dengarkan suara jauh tanpa mengejar sumbernya.',
+      'Sadari suara muncul, berubah, dan menghilang.',
+      'Kembali pada napas dan tutup sesi.',
+    ],
+  );
+}
+
+_PracticeMethod _mountain() {
+  return _PracticeMethod(
+    title: 'Mountain Meditation',
+    duration: const Duration(minutes: 15),
+    kind: _PracticeKind.grounding,
+    icon: Icons.terrain_outlined,
+    reason:
+        'Cocok saat emosi naik-turun, tekanan tinggi, atau pengguna perlu melatih kestabilan.',
+    knowledge:
+        'Mountain Meditation memakai visualisasi gunung sebagai metafora kestabilan saat pikiran, emosi, dan keadaan berubah.',
+    assetKey: 'mountain_meditation',
+    steps: const [
+      'Mulai dengan persiapan tubuh dan napas.',
+      'Bayangkan bentuk gunung yang kokoh.',
+      'Bayangkan cuaca berubah di sekitar gunung.',
+      'Hubungkan perubahan cuaca dengan perubahan pikiran dan emosi.',
+      'Rasakan kestabilan tubuh.',
+      'Tutup sesi dengan perlahan.',
     ],
   );
 }
@@ -1487,3 +1643,135 @@ Color _stepTone(int step) {
 
   return tones[step % tones.length];
 }
+
+String? _assetKeyForCode(String code) {
+  return switch (code) {
+    'mindful_breathing' => 'mindful_breathing',
+    'focused_attention' => 'focused_attention',
+    'body_scan_micro' || 'body_scan_full' => 'body_scan',
+    'sitting_meditation' => 'sitting_meditation',
+    'mindful_movement' => 'mindful_movement',
+    'walking_meditation' => 'walking_meditation',
+    'open_monitoring' => 'open_monitoring',
+    'mindfulness_of_sounds' => 'sounds',
+    'loving_kindness' => 'loving_kindness',
+    'mountain_meditation' => 'mountain_meditation',
+    'informal_mindfulness' => 'informal_mindfulness',
+    _ => null,
+  };
+}
+
+String? _mindfulnessStepAsset(_PracticeMethod method, int activeStep) {
+  final assetKey = method.assetKey;
+
+  if (assetKey == null) {
+    return null;
+  }
+
+  final assets = _mindfulnessStepAssets[assetKey];
+
+  if (assets == null || activeStep < 0 || activeStep >= assets.length) {
+    return null;
+  }
+
+  return assets[activeStep];
+}
+
+const Map<String, List<String>> _mindfulnessStepAssets = {
+  'mindful_breathing': [
+    'mindful_breathing_01_preparation.png',
+    'mindful_breathing_02_notice_breath.png',
+    'mindful_breathing_03_return_from_distraction.png',
+    'mindful_breathing_04_closing.png',
+  ],
+  'focused_attention': [
+    'focused_attention_01_choose_anchor.png',
+    'focused_attention_02_hold_focus.png',
+    'focused_attention_03_label_and_return.png',
+    'focused_attention_04_closing.png',
+  ],
+  'body_scan': [
+    'body_scan_01_preparation.png',
+    'body_scan_02_feet.png',
+    'body_scan_03_legs.png',
+    'body_scan_04_pelvis_lower_back.png',
+    'body_scan_05_abdomen.png',
+    'body_scan_06_chest.png',
+    'body_scan_07_hands_arms.png',
+    'body_scan_08_shoulders_neck.png',
+    'body_scan_09_face_head.png',
+    'body_scan_10_whole_body.png',
+  ],
+  'sitting_meditation': [
+    'sitting_meditation_01_posture.png',
+    'sitting_meditation_02_breath.png',
+    'sitting_meditation_03_body_sensation.png',
+    'sitting_meditation_04_sounds.png',
+    'sitting_meditation_05_thoughts.png',
+    'sitting_meditation_06_emotions.png',
+    'sitting_meditation_07_closing.png',
+  ],
+  'mindful_movement': [
+    'mindful_movement_01_grounding.png',
+    'mindful_movement_02_shoulders_up_down.png',
+    'mindful_movement_03_shoulder_roll.png',
+    'mindful_movement_04_arms_lift.png',
+    'mindful_movement_05_neck_side.png',
+    'mindful_movement_06_upper_back.png',
+    'mindful_movement_07_waist_legs.png',
+    'mindful_movement_08_closing.png',
+  ],
+  'walking_meditation': [
+    'walking_meditation_01_stand_feet_contact.png',
+    'walking_meditation_02_begin_walking.png',
+    'walking_meditation_03_lift_move_touch.png',
+    'walking_meditation_04_whole_body_movement.png',
+    'walking_meditation_05_breath_and_steps.png',
+    'walking_meditation_06_environment.png',
+    'walking_meditation_07_slow_stop_close.png',
+  ],
+  'open_monitoring': [
+    'open_monitoring_01_stabilize_breath.png',
+    'open_monitoring_02_body_awareness.png',
+    'open_monitoring_03_notice_sounds.png',
+    'open_monitoring_04_notice_thoughts_emotions.png',
+    'open_monitoring_05_open_awareness.png',
+    'open_monitoring_06_return_and_close.png',
+  ],
+  'sounds': [
+    'sounds_01_preparation.png',
+    'sounds_02_near_sounds.png',
+    'sounds_03_far_sounds.png',
+    'sounds_04_sound_appears_changes_fades.png',
+    'sounds_05_return_to_breath.png',
+  ],
+  'loving_kindness': [
+    'loving_kindness_01_stabilize.png',
+    'loving_kindness_02_self_kindness.png',
+    'loving_kindness_03_trusted_person.png',
+    'loving_kindness_04_expand_kindness.png',
+    'loving_kindness_05_closing.png',
+  ],
+  'mountain_meditation': [
+    'mountain_meditation_01_prepare_breath.png',
+    'mountain_meditation_02_visualize_mountain.png',
+    'mountain_meditation_03_weather_changes.png',
+    'mountain_meditation_04_thoughts_emotions_change.png',
+    'mountain_meditation_05_stable_body.png',
+    'mountain_meditation_06_close.png',
+  ],
+  'informal_mindfulness': [
+    'informal_drinking_01_hold_cup.png',
+    'informal_drinking_02_notice_color_aroma.png',
+    'informal_drinking_03_drink_slowly.png',
+    'informal_drinking_04_notice_after_swallow.png',
+    'informal_eating_01_notice_food.png',
+    'informal_eating_02_take_one_bite.png',
+    'informal_eating_03_chew_slowly.png',
+    'informal_eating_04_notice_taste_texture.png',
+    'informal_eating_05_notice_body.png',
+    'informal_walking_class_01_notice_steps.png',
+    'informal_walking_class_02_notice_breath.png',
+    'informal_walking_class_03_notice_environment.png',
+  ],
+};

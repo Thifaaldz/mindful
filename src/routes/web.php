@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\SchoolRegistrationController;
+use App\Http\Controllers\RegionController;
 use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
 use Illuminate\Support\Facades\Response;
@@ -32,6 +33,13 @@ Route::get('/register-school', [SchoolRegistrationController::class, 'create'])
     ->name('schools.register.create');
 Route::post('/register-school', [SchoolRegistrationController::class, 'store'])
     ->name('schools.register.store');
+
+Route::get('/regions/provinces', [RegionController::class, 'provinces'])
+    ->name('regions.provinces');
+Route::get('/regions/regencies/{provinceCode}', [RegionController::class, 'regencies'])
+    ->name('regions.regencies');
+Route::get('/regions/districts/{regencyCode}', [RegionController::class, 'districts'])
+    ->name('regions.districts');
 
 Route::get('/download/android', function () {
     $apkPath = public_path('downloads/mindfuledu.apk');

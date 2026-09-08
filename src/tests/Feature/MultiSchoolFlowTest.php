@@ -7,6 +7,8 @@ use App\Models\User;
 use App\Services\SchoolApprovalService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Role;
@@ -40,6 +42,43 @@ test('public school registration creates a pending school request', function () 
     expect($school)->not->toBeNull()
         ->and($school->status)->toBe(School::STATUS_PENDING)
         ->and($school->slug)->not->toBeEmpty();
+});
+
+test('public region endpoints expose nested indonesia choices', function () {
+    Cache::flush();
+
+    Http::fake([
+        'https://wilayah.id/api/provinces.json' => Http::response([
+            'data' => [
+                ['code' => '31', 'name' => ' DKI Jakarta '],
+            ],
+        ]),
+        'https://wilayah.id/api/regencies/31.json' => Http::response([
+            'data' => [
+                ['code' => '31.74', 'name' => ' Kota Administrasi Jakarta Selatan '],
+            ],
+        ]),
+        'https://wilayah.id/api/districts/31.74.json' => Http::response([
+            'data' => [
+                ['code' => '31.74.06', 'name' => ' Cilandak '],
+            ],
+        ]),
+    ]);
+
+    $this->getJson('/regions/provinces')
+        ->assertOk()
+        ->assertJsonPath('regions.0.code', '31')
+        ->assertJsonPath('regions.0.name', 'DKI Jakarta');
+
+    $this->getJson('/regions/regencies/31')
+        ->assertOk()
+        ->assertJsonPath('regions.0.code', '31.74')
+        ->assertJsonPath('regions.0.name', 'Kota Administrasi Jakarta Selatan');
+
+    $this->getJson('/regions/districts/31.74')
+        ->assertOk()
+        ->assertJsonPath('regions.0.code', '31.74.06')
+        ->assertJsonPath('regions.0.name', 'Cilandak');
 });
 
 test('super admin approval creates school admin access without changing admin panel access', function () {

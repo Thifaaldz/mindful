@@ -62,8 +62,14 @@
             color: var(--text);
             background: #fff;
         }
+        select:disabled {
+            background: #f3f6f4;
+            color: #8a9891;
+            cursor: not-allowed;
+        }
         textarea { min-height: 110px; resize: vertical; }
         .error { margin-top: 6px; color: #b42318; font-size: 13px; }
+        .hint { margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.5; }
         button {
             margin-top: 20px;
             border: 0;
@@ -136,17 +142,26 @@
             </div>
             <div>
                 <label for="province">Provinsi *</label>
-                <input id="province" name="province" value="{{ old('province') }}" required>
+                <select id="province" name="province" required data-selected="{{ old('province') }}">
+                    <option value="">Memuat provinsi...</option>
+                </select>
+                <div class="hint" id="province_hint">Pilih provinsi terlebih dahulu.</div>
                 @error('province') <div class="error">{{ $message }}</div> @enderror
             </div>
             <div>
                 <label for="city">Kota/Kabupaten *</label>
-                <input id="city" name="city" value="{{ old('city') }}" required>
+                <select id="city" name="city" required data-selected="{{ old('city') }}" disabled>
+                    <option value="">Pilih provinsi terlebih dahulu</option>
+                </select>
+                <div class="hint" id="city_hint">Kota/kabupaten akan muncul setelah provinsi dipilih.</div>
                 @error('city') <div class="error">{{ $message }}</div> @enderror
             </div>
             <div>
-                <label for="district">Kecamatan</label>
-                <input id="district" name="district" value="{{ old('district') }}">
+                <label for="district">Kecamatan *</label>
+                <select id="district" name="district" required data-selected="{{ old('district') }}" disabled>
+                    <option value="">Pilih kota/kabupaten terlebih dahulu</option>
+                </select>
+                <div class="hint" id="district_hint">Kecamatan akan muncul setelah kota/kabupaten dipilih.</div>
                 @error('district') <div class="error">{{ $message }}</div> @enderror
             </div>
             <div>
@@ -173,5 +188,158 @@
         <button type="submit">Kirim Pendaftaran</button>
     </form>
 </main>
+<script>
+    (() => {
+        const endpoints = {
+            provinces: @json(route('regions.provinces')),
+            regencies: @json(url('/regions/regencies')),
+            districts: @json(url('/regions/districts')),
+        };
+
+        const selects = {
+            province: document.getElementById('province'),
+            city: document.getElementById('city'),
+            district: document.getElementById('district'),
+        };
+
+        const hints = {
+            province: document.getElementById('province_hint'),
+            city: document.getElementById('city_hint'),
+            district: document.getElementById('district_hint'),
+        };
+
+        const oldValues = {
+            province: selects.province.dataset.selected || '',
+            city: selects.city.dataset.selected || '',
+            district: selects.district.dataset.selected || '',
+        };
+
+        const resetSelect = (select, placeholder, disabled = true) => {
+            select.innerHTML = '';
+            select.append(new Option(placeholder, ''));
+            select.disabled = disabled;
+        };
+
+        const setLoading = (select, message) => {
+            select.innerHTML = '';
+            select.append(new Option(message, ''));
+            select.disabled = true;
+        };
+
+        const populateSelect = (select, regions, placeholder, selectedValue = '') => {
+            select.innerHTML = '';
+            select.append(new Option(placeholder, ''));
+
+            regions.forEach((region) => {
+                const option = new Option(region.name, region.name);
+                option.dataset.code = region.code;
+
+                if (selectedValue && region.name.toLowerCase() === selectedValue.toLowerCase()) {
+                    option.selected = true;
+                }
+
+                select.append(option);
+            });
+
+            select.disabled = regions.length === 0;
+        };
+
+        const selectedCode = (select) => select.options[select.selectedIndex]?.dataset.code || '';
+
+        const fetchRegions = async (url) => {
+            const response = await fetch(url, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error('Request gagal');
+            }
+
+            const payload = await response.json();
+
+            return Array.isArray(payload.regions) ? payload.regions : [];
+        };
+
+        const loadProvinces = async () => {
+            setLoading(selects.province, 'Memuat provinsi...');
+            resetSelect(selects.city, 'Pilih provinsi terlebih dahulu');
+            resetSelect(selects.district, 'Pilih kota/kabupaten terlebih dahulu');
+
+            try {
+                const provinces = await fetchRegions(endpoints.provinces);
+                populateSelect(selects.province, provinces, 'Pilih provinsi', oldValues.province);
+                hints.province.textContent = provinces.length
+                    ? 'Pilih provinsi sesuai lokasi sekolah.'
+                    : 'Data provinsi belum berhasil dimuat.';
+
+                if (selects.province.value) {
+                    await loadRegencies(oldValues.city, oldValues.district);
+                }
+            } catch (error) {
+                resetSelect(selects.province, 'Gagal memuat provinsi');
+                hints.province.textContent = 'Periksa koneksi server lalu muat ulang halaman.';
+            }
+        };
+
+        const loadRegencies = async (selectedCity = '', selectedDistrict = '') => {
+            const provinceCode = selectedCode(selects.province);
+            resetSelect(selects.district, 'Pilih kota/kabupaten terlebih dahulu');
+
+            if (!provinceCode) {
+                resetSelect(selects.city, 'Pilih provinsi terlebih dahulu');
+                hints.city.textContent = 'Kota/kabupaten akan muncul setelah provinsi dipilih.';
+                return;
+            }
+
+            setLoading(selects.city, 'Memuat kota/kabupaten...');
+
+            try {
+                const regencies = await fetchRegions(`${endpoints.regencies}/${provinceCode}`);
+                populateSelect(selects.city, regencies, 'Pilih kota/kabupaten', selectedCity);
+                hints.city.textContent = regencies.length
+                    ? 'Pilih kota/kabupaten sesuai lokasi sekolah.'
+                    : 'Data kota/kabupaten belum berhasil dimuat.';
+
+                if (selects.city.value) {
+                    await loadDistricts(selectedDistrict);
+                }
+            } catch (error) {
+                resetSelect(selects.city, 'Gagal memuat kota/kabupaten');
+                hints.city.textContent = 'Periksa koneksi server lalu pilih provinsi ulang.';
+            }
+        };
+
+        const loadDistricts = async (selectedDistrict = '') => {
+            const regencyCode = selectedCode(selects.city);
+
+            if (!regencyCode) {
+                resetSelect(selects.district, 'Pilih kota/kabupaten terlebih dahulu');
+                hints.district.textContent = 'Kecamatan akan muncul setelah kota/kabupaten dipilih.';
+                return;
+            }
+
+            setLoading(selects.district, 'Memuat kecamatan...');
+
+            try {
+                const districts = await fetchRegions(`${endpoints.districts}/${regencyCode}`);
+                populateSelect(selects.district, districts, 'Pilih kecamatan', selectedDistrict);
+                hints.district.textContent = districts.length
+                    ? 'Pilih kecamatan sesuai lokasi sekolah.'
+                    : 'Data kecamatan belum berhasil dimuat.';
+            } catch (error) {
+                resetSelect(selects.district, 'Gagal memuat kecamatan');
+                hints.district.textContent = 'Periksa koneksi server lalu pilih kota/kabupaten ulang.';
+            }
+        };
+
+        selects.province.addEventListener('change', () => loadRegencies());
+        selects.city.addEventListener('change', () => loadDistricts());
+
+        loadProvinces();
+    })();
+</script>
 </body>
 </html>

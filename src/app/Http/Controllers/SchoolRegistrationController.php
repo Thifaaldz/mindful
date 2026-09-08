@@ -22,7 +22,7 @@ class SchoolRegistrationController extends Controller
             'address' => ['required', 'string'],
             'province' => ['required', 'string', 'max:120'],
             'city' => ['required', 'string', 'max:120'],
-            'district' => ['nullable', 'string', 'max:120'],
+            'district' => ['required', 'string', 'max:120'],
             'contact_name' => ['required', 'string', 'max:255'],
             'contact_position' => ['required', 'string', 'max:120'],
             'contact_email' => ['required', 'email', 'max:255'],

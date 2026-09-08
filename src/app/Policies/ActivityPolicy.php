@@ -10,21 +10,12 @@ class ActivityPolicy
 {
     use HandlesAuthorization;
 
-    public function before(User $user, string $ability): ?bool
-    {
-        if ($user->hasRole(['super_admin', 'admin', 'school_admin'])) {
-            return true;
-        }
-
-        return null;
-    }
-
     /**
      * Determine whether the user can view any models.
      */
     public function viewAny(User $user): bool
     {
-        return $user->can('view_any_student::observation');
+        return $user->can('view_any_teacher::activity');
     }
 
     /**
@@ -32,7 +23,7 @@ class ActivityPolicy
      */
     public function view(User $user, Activity $activity): bool
     {
-        return $user->can('view_student::observation');
+        return $user->can('view_teacher::activity');
     }
 
     /**
@@ -40,7 +31,7 @@ class ActivityPolicy
      */
     public function create(User $user): bool
     {
-        return $user->can('create_student::observation');
+        return $user->can('create_teacher::activity');
     }
 
     /**
@@ -48,7 +39,7 @@ class ActivityPolicy
      */
     public function update(User $user, Activity $activity): bool
     {
-        return $user->can('update_student::observation');
+        return $user->can('update_teacher::activity');
     }
 
     /**
@@ -56,7 +47,7 @@ class ActivityPolicy
      */
     public function delete(User $user, Activity $activity): bool
     {
-        return $user->can('delete_student::observation');
+        return $user->can('delete_teacher::activity');
     }
 
     /**
@@ -64,7 +55,7 @@ class ActivityPolicy
      */
     public function deleteAny(User $user): bool
     {
-        return $user->can('delete_any_student::observation');
+        return $user->can('delete_any_teacher::activity');
     }
 
     /**
