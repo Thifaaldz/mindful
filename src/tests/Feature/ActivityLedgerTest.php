@@ -305,11 +305,13 @@ test('one angry checkout raises the daily status to yellow while counting all jo
         'category' => 'mengajar',
     ])->json('activity.id');
 
+    Carbon::setTestNow(Carbon::parse(now()->toDateString().' 08:00:00'));
     $this->postJson("/api/activities/{$positiveId}/check-in", [
         'mood' => 'senang',
         'intensity' => 5,
     ])->assertOk();
 
+    Carbon::setTestNow(Carbon::parse(now()->toDateString().' 09:00:00'));
     $this->postJson("/api/activities/{$positiveId}/check-out", [
         'mood' => 'tenang',
         'fact' => 'Murid mudah memahami materi.',
@@ -317,11 +319,13 @@ test('one angry checkout raises the daily status to yellow while counting all jo
         'plan' => 'Besok mengulang metode yang sama.',
     ])->assertOk();
 
+    Carbon::setTestNow(Carbon::parse(now()->toDateString().' 10:00:00'));
     $this->postJson("/api/activities/{$angryId}/check-in", [
         'mood' => 'marah',
         'intensity' => 5,
     ])->assertOk();
 
+    Carbon::setTestNow(Carbon::parse(now()->toDateString().' 11:00:00'));
     $this->postJson("/api/activities/{$angryId}/check-out", [
         'mood' => 'marah',
         'fact' => 'Tidak ada yang memahami penjelasan.',
@@ -331,6 +335,8 @@ test('one angry checkout raises the daily status to yellow while counting all jo
         'burnout_tags' => ['kelelahan_emosional'],
     ])->assertOk();
 
+    Carbon::setTestNow();
+
     $overview = $this->getJson('/api/burnout-analyses/overview')
         ->assertOk()
         ->assertJsonPath('today.activity_count', 2)
@@ -339,20 +345,21 @@ test('one angry checkout raises the daily status to yellow while counting all jo
         ->assertJsonPath('today.category', 'kuning')
         ->assertJsonPath('today.score', 40)
         ->assertJsonPath('today.activity_breakdown.0.title', 'Ngajar bahasa indonesia')
+        ->assertJsonPath('today.activity_breakdown.0.score', 0)
         ->assertJsonPath('today.activity_breakdown.0.condition', 'hijau')
+        ->assertJsonPath('today.activity_breakdown.0.recommended_tactic', null)
         ->assertJsonPath('today.activity_breakdown.1.title', 'Ngajar bahasa inggris')
         ->assertJsonPath('today.activity_breakdown.1.condition', 'merah')
-        ->assertJsonCount(2, 'today.journal_reviews')
+        ->assertJsonCount(1, 'today.journal_reviews')
         ->json('today');
 
     $reviews = collect($overview['journal_reviews']);
     $breakdown = collect($overview['activity_breakdown']);
 
-    expect($reviews->pluck('title')->all())->toContain('Ngajar bahasa indonesia', 'Ngajar bahasa inggris')
-        ->and($reviews->firstWhere('title', 'Ngajar bahasa indonesia')['condition'])->toBe('hijau')
-        ->and($reviews->firstWhere('title', 'Ngajar bahasa indonesia')['recommended_tactic']['code'])->toBe('mindful_breathing')
+    expect($reviews->pluck('title')->all())->toBe(['Ngajar bahasa inggris'])
+        ->and($reviews->firstWhere('title', 'Ngajar bahasa indonesia'))->toBeNull()
         ->and($reviews->firstWhere('title', 'Ngajar bahasa inggris')['recommended_tactic']['code'])->toBe('stop_technique')
-        ->and($breakdown->firstWhere('title', 'Ngajar bahasa indonesia')['recommended_tactic']['code'])->toBe('mindful_breathing')
+        ->and($breakdown->firstWhere('title', 'Ngajar bahasa indonesia')['recommended_tactic'])->toBeNull()
         ->and($breakdown->firstWhere('title', 'Ngajar bahasa inggris')['condition'])->toBe('merah');
 
     $this->getJson('/api/activities?date='.now()->toDateString())
@@ -360,6 +367,63 @@ test('one angry checkout raises the daily status to yellow while counting all jo
         ->assertJsonPath('latest_analysis.category', 'kuning')
         ->assertJsonPath('latest_analysis.journal_count', 2)
         ->assertJsonCount(2, 'latest_analysis.activity_breakdown');
+});
+
+test('positive stable checkout stays in activity context without raising burnout score', function () {
+    config(['services.mindful_ml.url' => null]);
+
+    Role::create(['name' => 'teacher']);
+    $user = User::factory()->create();
+    $user->assignRole('teacher');
+    Sanctum::actingAs($user);
+
+    $activityId = $this->postJson('/api/activities', [
+        'title' => 'Diskusi kelas lancar',
+        'activity_date' => now()->toDateString(),
+        'start_time' => '08:00',
+        'end_time' => '10:00',
+        'category' => 'mengajar',
+    ])->json('activity.id');
+
+    $this->postJson("/api/activities/{$activityId}/check-in", [
+        'mood' => 'senang',
+        'intensity' => 5,
+    ])->assertOk();
+
+    $this->postJson("/api/activities/{$activityId}/check-out", [
+        'mood' => 'senang',
+        'fact' => 'Diskusi berjalan lancar dan siswa aktif bertanya.',
+        'feeling' => 'Saya merasa nyaman dengan ritme kelas hari ini.',
+        'pattern' => 'Persiapan materi membantu kelas lebih tertata.',
+        'plan' => 'Besok lanjutkan pola diskusi yang sama.',
+    ])->assertOk();
+
+    $overview = $this->getJson('/api/burnout-analyses/overview')
+        ->assertOk()
+        ->assertJsonPath('today.activity_count', 1)
+        ->assertJsonPath('today.completed_activity_count', 1)
+        ->assertJsonPath('today.journal_count', 1)
+        ->assertJsonPath('today.category', 'hijau')
+        ->assertJsonPath('today.score', 0)
+        ->assertJsonPath('today.journal_score', 0)
+        ->assertJsonPath('today.dominant_factors.0', 'balanced_period')
+        ->assertJsonPath('today.activity_breakdown.0.score', 0)
+        ->assertJsonPath('today.activity_breakdown.0.condition', 'hijau')
+        ->assertJsonPath('today.activity_breakdown.0.recommended_tactic', null)
+        ->assertJsonCount(0, 'today.journal_reviews')
+        ->json('today');
+
+    expect($overview['activity_breakdown'][0]['title'])->toBe('Diskusi kelas lancar');
+
+    $this->postJson('/api/burnout-analyses', [
+        'period_type' => 'daily',
+        'date' => now()->toDateString(),
+    ])
+        ->assertCreated()
+        ->assertJsonPath('final_burnout_risk_score', 0)
+        ->assertJsonPath('category', 'hijau')
+        ->assertJsonPath('payload.journal_count', 1)
+        ->assertJsonCount(0, 'payload.journal_reviews');
 });
 
 test('students can open guided mindfulness toolkit with knowledge and steps', function () {
@@ -404,11 +468,13 @@ test('manual burnout analysis recalculates after adding activity on the same day
         'category' => 'mengajar',
     ])->json('activity.id');
 
+    Carbon::setTestNow(Carbon::parse('2026-08-27 07:00:00'));
     $this->postJson("/api/activities/{$completedId}/check-in", [
         'mood' => 'tenang',
         'intensity' => 5,
     ])->assertOk();
 
+    Carbon::setTestNow(Carbon::parse('2026-08-27 08:00:00'));
     $this->postJson("/api/activities/{$completedId}/check-out", [
         'mood' => 'cemas',
         'fact' => 'Materi berjalan padat dan kelas perlu perhatian ekstra.',
@@ -428,13 +494,29 @@ test('manual burnout analysis recalculates after adding activity on the same day
         ->assertJsonPath('activity_count', 1)
         ->json('final_burnout_risk_score');
 
-    $this->postJson('/api/activities', [
+    $additionalId = $this->postJson('/api/activities', [
         'title' => 'Matematika tambahan',
         'activity_date' => '2026-08-27',
         'start_time' => '13:00',
         'end_time' => '17:00',
         'category' => 'mengajar',
-    ])->assertCreated();
+    ])->assertCreated()->json('activity.id');
+
+    Carbon::setTestNow(Carbon::parse('2026-08-27 13:00:00'));
+    $this->postJson("/api/activities/{$additionalId}/check-in", [
+        'mood' => 'cemas',
+        'intensity' => 7,
+    ])->assertOk();
+
+    Carbon::setTestNow(Carbon::parse('2026-08-27 17:00:00'));
+    $this->postJson("/api/activities/{$additionalId}/check-out", [
+        'mood' => 'cemas',
+        'fact' => 'Tambahan kelas berlangsung padat.',
+        'feeling' => 'Saya merasa lelah dan perlu pemulihan.',
+        'plan' => 'Besok kurangi agenda tambahan.',
+    ])->assertOk();
+
+    Carbon::setTestNow();
 
     $second = $this->postJson('/api/burnout-analyses', [
         'period_type' => 'daily',
@@ -510,8 +592,8 @@ test('manual burnout analysis stores fastapi recommendation when ml service is a
                 'dominant_factors' => ['high_wellbeing_pressure'],
                 'theory_reference' => 'Jon Kabat-Zinn - Mindfulness-Based Stress Reduction (MBSR)',
             ],
-            'model_version' => 'fastapi-rule-mbsr-v2.3',
-            'scoring_version' => 'scoring-v2.3-mbsr',
+            'model_version' => 'fastapi-rule-mbsr-v2.4',
+            'scoring_version' => 'scoring-v2.4-mbsr',
         ]),
     ]);
 
@@ -545,20 +627,19 @@ test('manual burnout analysis stores fastapi recommendation when ml service is a
         'date' => '2026-08-27',
     ])
         ->assertCreated()
-        ->assertJsonPath('model_version', 'fastapi-rule-mbsr-v2.3')
-        ->assertJsonPath('recommendation_summary.headline', 'Rekomendasi dari activity terakhir')
-        ->assertJsonPath('recommendation_summary.practice_code', 'mindful_breathing')
-        ->assertJsonPath('recommendation_summary.source', 'mock')
-        ->assertJsonPath('recommendation_summary.tactic.category', 'mindful_breathing')
-        ->assertJsonPath('recommendation_summary.tactic.title', 'Mindful Breathing')
-        ->assertJsonPath('recommendation_summary.latest_activity_review.title', 'Kelas pagi')
-        ->assertJsonPath('payload.journal_reviews.0.recommended_tactic.code', 'mindful_breathing')
+        ->assertJsonPath('model_version', 'fastapi-rule-mbsr-v2.4')
+        ->assertJsonPath('final_burnout_risk_score', 0)
+        ->assertJsonPath('category', 'hijau')
+        ->assertJsonPath('dominant_factors.0', 'balanced_period')
+        ->assertJsonPath('recommendation_summary.headline', 'Risiko rendah')
+        ->assertJsonPath('recommendation_summary.practice_code', 'maintain_breath_awareness')
+        ->assertJsonPath('recommendation_summary.source', 'laravel-rule')
+        ->assertJsonCount(0, 'payload.journal_reviews')
         ->assertJsonPath('payload.ml_service_used', true)
-        ->assertJsonPath('payload.recommendation_source', 'mock');
+        ->assertJsonPath('payload.recommendation_source', 'laravel-rule');
 
     expect($response->json('recommendation_summary.action'))
-        ->toContain('Kelas pagi')
-        ->toContain('Mindful Breathing');
+        ->toContain('Awareness of Breathing');
 
     $this->getJson('/api/burnout-analyses')
         ->assertOk()
@@ -580,7 +661,7 @@ test('manual burnout analysis stores fastapi recommendation when ml service is a
         && $request['feeling'] === 'Saya merasa cukup stabil.');
 });
 
-test('manual analysis uses latest activity tactic for the primary recommendation', function () {
+test('manual analysis uses risky period activity for the primary recommendation', function () {
     config(['services.mindful_ml.url' => null]);
 
     Role::create(['name' => 'teacher']);
@@ -636,16 +717,17 @@ test('manual analysis uses latest activity tactic for the primary recommendation
         'date' => '2026-08-27',
     ])
         ->assertCreated()
-        ->assertJsonPath('recommendation_summary.headline', 'Rekomendasi dari activity terakhir')
-        ->assertJsonPath('recommendation_summary.practice_code', 'informal_mindfulness')
-        ->assertJsonPath('recommendation_summary.practice_title', 'Informal Mindfulness')
-        ->assertJsonPath('recommendation_summary.latest_activity_review.title', 'Diskusi refleksi')
-        ->assertJsonPath('payload.journal_reviews.0.title', 'Diskusi refleksi')
-        ->assertJsonPath('payload.journal_reviews.0.recommended_tactic.code', 'informal_mindfulness');
+        ->assertJsonPath('recommendation_summary.headline', 'Rekomendasi dari kegiatan Anda hari ini')
+        ->assertJsonPath('recommendation_summary.practice_code', 'breathing_478')
+        ->assertJsonPath('recommendation_summary.practice_title', 'Napas 4-7-8')
+        ->assertJsonPath('recommendation_summary.latest_activity_review.title', 'Presentasi kelas')
+        ->assertJsonPath('payload.journal_reviews.0.title', 'Presentasi kelas')
+        ->assertJsonPath('payload.journal_reviews.0.recommended_tactic.code', 'breathing_478')
+        ->assertJsonCount(1, 'payload.journal_reviews');
 
     expect($response->json('recommendation_summary.action'))
-        ->toContain('activity terakhir "Diskusi refleksi"')
-        ->toContain('Informal Mindfulness');
+        ->toContain('kegiatan Anda hari ini')
+        ->toContain('Napas 4-7-8');
 });
 
 test('manual burnout analysis reuses cached ai result when period data is unchanged', function () {
@@ -709,8 +791,8 @@ test('manual burnout analysis reuses cached ai result when period data is unchan
                 'dominant_factors' => ['checkout_negative_mood'],
                 'theory_reference' => 'Jon Kabat-Zinn - Mindfulness-Based Stress Reduction (MBSR)',
             ],
-            'model_version' => 'fastapi-rule-mbsr-v2.3',
-            'scoring_version' => 'scoring-v2.3-mbsr',
+            'model_version' => 'fastapi-rule-mbsr-v2.4',
+            'scoring_version' => 'scoring-v2.4-mbsr',
         ]),
     ]);
 

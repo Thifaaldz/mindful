@@ -640,7 +640,7 @@ class ActivityController extends Controller
             'completed' => $completed->count(),
             'checkin_pending' => $active->where('checkin_at', null)->count(),
             'weighted_planned_hours' => round($active->sum(fn (Activity $activity) => (float) $activity->planned_hours * (float) $activity->intensity_factor), 2),
-            'weighted_actual_hours' => round($completed->sum(fn (Activity $activity) => max((float) $activity->actual_hours, (float) $activity->planned_hours) * (float) $activity->intensity_factor), 2),
+            'weighted_actual_hours' => round($completed->sum(fn (Activity $activity) => (float) $activity->actual_hours * (float) $activity->intensity_factor), 2),
         ];
     }
 }

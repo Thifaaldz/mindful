@@ -13,11 +13,11 @@ use Illuminate\Support\Facades\Http;
 class BurnoutAnalysisService
 {
     private const MAX_DAILY_CAPACITY_HOURS = 8;
-    private const SCORING_VERSION = 'scoring-v2.3-mbsr';
-    private const MODEL_VERSION = 'php-fallback-mbsr-v2.3';
-    private const THRESHOLD_VERSION = 'threshold-v2.3';
+    private const SCORING_VERSION = 'scoring-v2.4-mbsr';
+    private const MODEL_VERSION = 'php-fallback-mbsr-v2.4';
+    private const THRESHOLD_VERSION = 'threshold-v2.4';
     private const CHECKIN_NEGATIVE_MOODS = ['cemas', 'sedih', 'marah'];
-    private const CHECKOUT_NEGATIVE_MOODS = ['cemas', 'sedih', 'marah'];
+    private const CHECKOUT_NEGATIVE_MOODS = ['cemas', 'sedih', 'marah', 'lelah'];
     private const JOURNAL_PRESSURE_KEYWORDS = [
         'lelah',
         'capek',
@@ -261,9 +261,9 @@ class BurnoutAnalysisService
             ],
             'formula' => [
                 'final' => 'Final = 50% Workload Score + 50% Wellbeing Score',
-                'workload' => 'Workload Score = weighted current hours / kapasitas periode x 100',
+                'workload' => 'Workload Score = weighted actual hours / kapasitas periode x 100',
                 'journal' => 'Wellbeing Score = rasio mood negatif check-in/check-out, intensitas mood check-in, kata tekanan pada jurnal fact/feeling/plan, dan kecenderungan memburuk saat checkout',
-                'capacity' => 'Kapasitas harian default = 8 jam. Aktivitas selesai memakai nilai terbesar dari actual/planned hours, aktivitas belum selesai memakai planned hours.',
+                'capacity' => 'Kapasitas harian = 8 jam, mingguan = 7 x 8 jam, bulanan = hari kerja aktif x 8 jam. Weighted actual hours memakai actual_hours dari aktivitas yang sudah check-out dikalikan intensity factor.',
             ],
             'analogies' => $this->riskAnalogies(),
         ];
@@ -305,12 +305,14 @@ class BurnoutAnalysisService
 
         $weightedPlannedHours = $this->weightedHours($activities, 'planned_hours');
         $weightedActualHours = $this->weightedCurrentHours($activities);
-        $activeDays = max(1, $activities->pluck('activity_date')->map->toDateString()->unique()->count());
-        $periodCapacity = self::MAX_DAILY_CAPACITY_HOURS * $activeDays;
+        $activeDays = max(1, $completed->pluck('activity_date')->map->toDateString()->unique()->count());
+        $periodCapacity = $this->periodCapacityHours($periodType, $activeDays);
         $journalRows = $completed->filter(fn (Activity $activity) => $this->hasReviewableJournal($activity));
+        $riskJournalRows = $journalRows->filter(fn (Activity $activity) => $this->activityHasBurnoutSignal($activity));
         $crisisCount = $journalRows->filter(fn (Activity $activity) => (bool) $activity->checkout_crisis_flag)->count();
         $selfReportLevels = $this->selfReportLevels($user, $periodStart, $periodEnd);
         $tacticCatalog = $this->mindfulnessTacticCatalog();
+        $useLocalRecommendation = false;
 
         $mlPayload = $this->mlPayload($user, $periodType, $periodCapacity, $activities, $selfReportLevels, $tacticCatalog);
         $mlScore = $useMl ? $this->scoreViaMl($mlPayload) : null;
@@ -344,6 +346,14 @@ class BurnoutAnalysisService
             $modelVersion = self::MODEL_VERSION;
         }
 
+        if (! $this->hasPeriodBurnoutSignal($completed, $selfReportLevels) && $workloadScoreRaw < 80) {
+            $journalScore = 0;
+            $finalScore = $dataSufficiency ? 0 : null;
+            $category = $finalScore === null ? null : 'hijau';
+            $dominantFactors = $dataSufficiency ? ['balanced_period'] : $dominantFactors;
+            $useLocalRecommendation = true;
+        }
+
         if ($crisisCount > 0 && $finalScore !== null) {
             $finalScore = max($finalScore, 75);
             $category = 'merah';
@@ -352,10 +362,10 @@ class BurnoutAnalysisService
 
         [$finalScore, $category] = $this->applyRiskFloor($finalScore, $category, $dominantFactors);
 
-        $recommendation = is_array($mlScore['recommendation_summary'] ?? null)
+        $recommendation = (! $useLocalRecommendation && is_array($mlScore['recommendation_summary'] ?? null))
             ? $mlScore['recommendation_summary']
             : $this->recommendation($category, $dominantFactors, $user, $tacticCatalog);
-        $recommendation = $this->alignRecommendationWithJournalReview($recommendation, $journalRows, $tacticCatalog, $periodType);
+        $recommendation = $this->alignRecommendationWithJournalReview($recommendation, $riskJournalRows, $tacticCatalog, $periodType);
         $recommendation = $this->enrichRecommendationWithTactic($recommendation, $category, $dominantFactors, $user, $tacticCatalog);
         $recommendationCodes = array_values(array_unique($recommendation['codes'] ?? []));
         if ($recommendationCodes === [] && is_array($mlScore['recommendation_codes'] ?? null)) {
@@ -384,14 +394,23 @@ class BurnoutAnalysisService
                 'active_days' => $activeDays,
                 'period_capacity_hours' => $periodCapacity,
                 'journal_count' => $journalRows->count(),
-                'formula' => 'final = 0.50 * min(100, workload_score_raw) + 0.50 * wellbeing_score; current hours memakai nilai terbesar dari actual/planned untuk completed dan planned hours untuk aktivitas belum selesai',
+                'formula' => 'workload_score_raw = weighted_actual_hours / period_capacity_hours * 100; daily capacity = 8 jam, weekly capacity = 7 x 8 jam, monthly capacity = active_days x 8 jam; final = 0.50 * min(100, workload_score_raw) + 0.50 * wellbeing_score',
                 'ml_service_used' => $mlScore !== null,
                 'ml_calculation' => $mlScore['calculation'] ?? null,
                 'recommendation_source' => $recommendation['source'] ?? ($mlScore !== null ? 'fastapi-rule' : 'laravel-rule'),
-                'journal_reviews' => $this->journalReviews($journalRows, $tacticCatalog),
+                'journal_reviews' => $this->journalReviews($riskJournalRows, $tacticCatalog),
                 'activity_breakdown' => $this->activityBreakdown($activities),
             ],
         ];
+    }
+
+    private function periodCapacityHours(string $periodType, int $activeDays): float
+    {
+        return match ($periodType) {
+            'weekly' => self::MAX_DAILY_CAPACITY_HOURS * 7,
+            'monthly' => self::MAX_DAILY_CAPACITY_HOURS * max(1, $activeDays),
+            default => self::MAX_DAILY_CAPACITY_HOURS,
+        };
     }
 
     public function periodRange(string $periodType, Carbon|string|null $date = null): array
@@ -435,7 +454,7 @@ class BurnoutAnalysisService
             'activity_breakdown' => $analysis['payload']['activity_breakdown'] ?? [],
             'calculation' => [
                 'formula' => 'Final = 0.50 x min(100, Workload Score) + 0.50 x Wellbeing Score',
-                'workload_detail' => "Workload saat ini: {$weightedActualHours} weighted hours / {$capacity} jam kapasitas x 100 = ".round($workloadScore, 2).'. Completed memakai nilai terbesar dari actual/planned hours, planned/checked-in memakai planned hours.',
+                'workload_detail' => "Workload aktual: {$weightedActualHours} weighted actual hours / {$capacity} jam kapasitas x 100 = ".round($workloadScore, 2).'. Weighted actual hours memakai actual_hours dari aktivitas yang sudah check-out dikalikan intensity factor.',
                 'journal_detail' => "Wellbeing: check-in, check-out, dan jurnal menghasilkan skor ".round($journalScore, 2).' dari skala 0-100.',
                 'final_detail' => $score === null
                     ? 'Skor final belum dihitung karena jurnal check-out belum lengkap.'
@@ -490,8 +509,13 @@ class BurnoutAnalysisService
     private function weightedCurrentHours(Collection $activities): float
     {
         return (float) $activities->sum(function (Activity $activity) {
-            return $this->effectiveHours($activity) * ((float) $activity->intensity_factor);
+            return $this->actualAnalysisHours($activity) * ((float) $activity->intensity_factor);
         });
+    }
+
+    private function actualAnalysisHours(Activity $activity): float
+    {
+        return $activity->actual_hours === null ? 0 : (float) $activity->actual_hours;
     }
 
     private function effectiveHours(Activity $activity): float
@@ -517,7 +541,7 @@ class BurnoutAnalysisService
                 'category_name' => $activity->category,
                 'activity_kind' => $activity->activity_kind,
                 'planned_hours' => (float) $activity->planned_hours,
-                'actual_hours' => $this->effectiveHours($activity),
+                'actual_hours' => $this->actualAnalysisHours($activity),
                 'intensity_factor' => (float) $activity->intensity_factor,
                 'checkin_mood' => $activity->checkin_mood,
                 'checkin_intensity' => $activity->checkin_intensity,
@@ -717,8 +741,10 @@ class BurnoutAnalysisService
 
     private function checkoutNegative(Activity $activity): bool
     {
+        $checkoutMood = $activity->checkout_mood_detected ?: $activity->checkout_mood;
+
         return $this->hasReviewableJournal($activity)
-            && (in_array($activity->checkout_mood, self::CHECKOUT_NEGATIVE_MOODS, true)
+            && (in_array($checkoutMood, self::CHECKOUT_NEGATIVE_MOODS, true)
                 || $this->hasPressureText($this->checkoutText($activity)));
     }
 
@@ -745,7 +771,8 @@ class BurnoutAnalysisService
                 $values[] = (($activity->checkin_intensity ?? 5) / 10);
             }
             if ($this->checkoutNegative($activity)) {
-                $values[] = in_array($activity->checkout_mood, self::CHECKOUT_NEGATIVE_MOODS, true) ? 0.7 : 0.5;
+                $checkoutMood = $activity->checkout_mood_detected ?: $activity->checkout_mood;
+                $values[] = in_array($checkoutMood, self::CHECKOUT_NEGATIVE_MOODS, true) ? 0.7 : 0.5;
             }
         }
 
@@ -832,8 +859,9 @@ class BurnoutAnalysisService
             $factors[] = 'journal_pressure_terms';
         }
 
+        $hasBurnoutSignal = $this->hasBurnoutSignalInActivities($completed);
         $highIntensityCount = $completed->filter(fn (Activity $activity) => (float) $activity->intensity_factor >= 1.5)->count();
-        if ($highIntensityCount >= 2) {
+        if ($highIntensityCount >= 2 && ($hasBurnoutSignal || $workloadScoreRaw >= 80)) {
             $factors[] = 'consecutive_high_intensity';
         }
 
@@ -994,7 +1022,7 @@ class BurnoutAnalysisService
                     'burnout_dimensions' => $this->burnoutDimensions($activity),
                     'score' => round($score, 2),
                     'condition' => $this->category($score),
-                    'recommended_tactic' => $hasJournal
+                    'recommended_tactic' => $hasJournal && $this->activityHasBurnoutSignal($activity)
                         ? $this->recommendedTacticForJournalActivity($activity)
                         : null,
                 ];
@@ -1005,7 +1033,11 @@ class BurnoutAnalysisService
 
     private function activityRiskScore(Activity $activity): float
     {
-        $score = min(35, ($this->effectiveHours($activity) * (float) $activity->intensity_factor / self::MAX_DAILY_CAPACITY_HOURS) * 100);
+        if (! $this->activityHasBurnoutSignal($activity)) {
+            return 0;
+        }
+
+        $score = min(35, ($this->actualAnalysisHours($activity) * (float) $activity->intensity_factor / self::MAX_DAILY_CAPACITY_HOURS) * 100);
 
         if ($this->checkinNegative($activity)) {
             $score += 10 + (($activity->checkin_intensity ?? 5) / 10) * 10;
@@ -1035,6 +1067,33 @@ class BurnoutAnalysisService
             ...($activity->checkout_burnout_tags ?? []),
             ...($activity->checkout_auto_burnout_tags ?? []),
         ])));
+    }
+
+    private function hasPeriodBurnoutSignal(Collection $completed, array $selfReportLevels = []): bool
+    {
+        if ($this->hasBurnoutSignalInActivities($completed)) {
+            return true;
+        }
+
+        if ($selfReportLevels === []) {
+            return false;
+        }
+
+        return (array_sum($selfReportLevels) / count($selfReportLevels)) >= 7;
+    }
+
+    private function hasBurnoutSignalInActivities(Collection $activities): bool
+    {
+        return $activities->contains(fn (Activity $activity) => $this->activityHasBurnoutSignal($activity));
+    }
+
+    private function activityHasBurnoutSignal(Activity $activity): bool
+    {
+        return $this->checkinNegative($activity)
+            || $this->checkoutNegative($activity)
+            || $this->hasPressureText($this->checkoutText($activity))
+            || count($this->burnoutDimensions($activity)) > 0
+            || (bool) $activity->checkout_crisis_flag;
     }
 
     private function hasPressureText(string $text): bool
