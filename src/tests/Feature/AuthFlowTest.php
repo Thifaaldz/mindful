@@ -4,6 +4,7 @@ use App\Models\School;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
@@ -66,6 +67,67 @@ test('email registration uses approved school and waits for school admin approva
         ->assertJsonStructure(['token']);
 
     expect($user->hasRole('teacher'))->toBeTrue();
+});
+
+test('profile completion keeps teacher school assignment locked', function () {
+    $schoolA = School::create([
+        'name' => 'SDN Sekolah Awal',
+        'slug' => 'sdn-sekolah-awal',
+        'npsn' => 'LOCK-001',
+        'education_level' => 'sd',
+        'school_status' => 'public',
+        'address' => 'Jl. Awal',
+        'province' => 'DKI Jakarta',
+        'city' => 'Jakarta',
+        'contact_name' => 'Admin Awal',
+        'contact_email' => 'awal@mindfuledu.test',
+        'status' => School::STATUS_APPROVED,
+        'verified_at' => now(),
+    ]);
+    $schoolB = School::create([
+        'name' => 'SDN Sekolah Lain',
+        'slug' => 'sdn-sekolah-lain',
+        'npsn' => 'LOCK-002',
+        'education_level' => 'sd',
+        'school_status' => 'public',
+        'address' => 'Jl. Lain',
+        'province' => 'DKI Jakarta',
+        'city' => 'Jakarta',
+        'contact_name' => 'Admin Lain',
+        'contact_email' => 'lain@mindfuledu.test',
+        'status' => School::STATUS_APPROVED,
+        'verified_at' => now(),
+    ]);
+
+    $teacher = User::factory()->create([
+        'name' => 'Guru Pending',
+        'school_id' => $schoolA->id,
+        'school' => $schoolA->name,
+        'profile_completed' => false,
+        'approval_status' => 'pending',
+    ]);
+    $teacher->assignRole('teacher');
+
+    Sanctum::actingAs($teacher);
+
+    $this->putJson('/api/me/profile', [
+        'name' => 'Guru Lengkap',
+        'role' => 'teacher',
+        'school_id' => $schoolB->id,
+    ])
+        ->assertStatus(422)
+        ->assertJsonPath('message', 'Sekolah akun sudah ditentukan dan tidak dapat diganti.');
+
+    $this->putJson('/api/me/profile', [
+        'name' => 'Guru Lengkap',
+        'role' => 'teacher',
+    ])
+        ->assertOk()
+        ->assertJsonPath('user.school_id', $schoolA->id)
+        ->assertJsonPath('user.school', $schoolA->name)
+        ->assertJsonPath('user.profile_completed', true);
+
+    expect($teacher->refresh()->school_id)->toBe($schoolA->id);
 });
 
 test('google login creates account from verified id token', function () {

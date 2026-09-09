@@ -102,7 +102,7 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
                 && $this->schoolModel?->status === School::STATUS_APPROVED;
         }
 
-        return $this->hasRole(['super_admin', 'admin']);
+        return $this->hasRole('super_admin');
     }
 
     public function schoolModel(): BelongsTo

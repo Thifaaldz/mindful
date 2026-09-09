@@ -47,12 +47,12 @@ class StudentObservationResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return (bool) auth()->user()?->hasRole(['super_admin', 'admin']);
+        return (bool) auth()->user()?->hasRole('super_admin');
     }
 
     public static function canView($record): bool
     {
-        return (bool) auth()->user()?->hasRole(['super_admin', 'admin']);
+        return (bool) auth()->user()?->hasRole('super_admin');
     }
 
     public static function form(Form $form): Form

@@ -3,11 +3,9 @@
 namespace App\Filament\School\Resources\Concerns;
 
 use App\Models\User;
-use App\Notifications\UserApprovedNotification;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Tables;
-use Throwable;
 
 trait HandlesSchoolUserApproval
 {
@@ -20,6 +18,10 @@ trait HandlesSchoolUserApproval
             ->visible(fn (User $record): bool => $record->approval_status === 'pending')
             ->requiresConfirmation()
             ->action(function (User $record): void {
+                if (auth()->user()?->isSchoolAdmin() && (int) $record->school_id !== (int) auth()->user()?->school_id) {
+                    abort(403, 'Akun ini bukan bagian dari sekolah Anda.');
+                }
+
                 $record->forceFill([
                     'approval_status' => 'approved',
                     'approved_at' => now(),
@@ -29,15 +31,9 @@ trait HandlesSchoolUserApproval
                     'rejection_reason' => null,
                 ])->save();
 
-                try {
-                    $record->notify(new UserApprovedNotification($record));
-                } catch (Throwable $exception) {
-                    report($exception);
-                }
-
                 Notification::make()
                     ->title('Akun berhasil di-approve')
-                    ->body('Email pemberitahuan approval dikirim jika konfigurasi email aktif.')
+                    ->body('Tidak ada email otomatis yang dikirim. Silakan kabarkan approval secara pribadi.')
                     ->success()
                     ->send();
             });
@@ -57,6 +53,10 @@ trait HandlesSchoolUserApproval
                     ->maxLength(1000),
             ])
             ->action(function (User $record, array $data): void {
+                if (auth()->user()?->isSchoolAdmin() && (int) $record->school_id !== (int) auth()->user()?->school_id) {
+                    abort(403, 'Akun ini bukan bagian dari sekolah Anda.');
+                }
+
                 $record->forceFill([
                     'approval_status' => 'rejected',
                     'rejected_at' => now(),

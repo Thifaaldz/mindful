@@ -29,6 +29,9 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
   bool _loading = false;
   String? _error;
 
+  bool get _isSchoolSelectionLocked =>
+      (_role == 'teacher' || _role == 'student') && _selectedSchoolId != null;
+
   @override
   void initState() {
     super.initState();
@@ -119,28 +122,46 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
         final hasSelected = schools.any(
           (item) => (item as Map<String, dynamic>)['id'] == _selectedSchoolId,
         );
+        final locked = _isSchoolSelectionLocked;
+        final items = schools.map((item) {
+          final school = item as Map<String, dynamic>;
+          final city = '${school['city'] ?? ''}'.trim();
+          final subtitle = city.isEmpty ? '' : ' - $city';
+
+          return DropdownMenuItem<int>(
+            value: school['id'] as int,
+            child: Text('${school['name']}$subtitle'),
+          );
+        }).toList();
+
+        if (locked && !hasSelected) {
+          final fallbackLabel = _schoolController.text.trim().isEmpty
+              ? 'Sekolah terdaftar'
+              : _schoolController.text.trim();
+          items.add(
+            DropdownMenuItem<int>(
+              value: _selectedSchoolId,
+              child: Text(fallbackLabel),
+            ),
+          );
+        }
 
         return DropdownButtonFormField<int>(
-          initialValue: hasSelected ? _selectedSchoolId : null,
+          initialValue: hasSelected || locked ? _selectedSchoolId : null,
           decoration: InputDecoration(
             labelText: switch (_role) {
               'parent' => 'Sekolah anak',
               'student' => 'Sekolah siswa',
               _ => 'Sekolah',
             },
+            filled: locked,
+            fillColor: locked ? Colors.grey.shade100 : null,
+            suffixIcon: locked ? const Icon(Icons.lock_outline) : null,
             border: OutlineInputBorder(),
           ),
-          items: schools.map((item) {
-            final school = item as Map<String, dynamic>;
-            final city = '${school['city'] ?? ''}'.trim();
-            final subtitle = city.isEmpty ? '' : ' - $city';
-
-            return DropdownMenuItem<int>(
-              value: school['id'] as int,
-              child: Text('${school['name']}$subtitle'),
-            );
-          }).toList(),
-          onChanged: snapshot.connectionState == ConnectionState.waiting
+          items: items,
+          onChanged:
+              snapshot.connectionState == ConnectionState.waiting || locked
               ? null
               : (value) {
                   final selectedSchools = schools
@@ -152,8 +173,11 @@ class _ProfileCompletionScreenState extends State<ProfileCompletionScreen> {
                       : '${selectedSchools.first['name'] ?? ''}'.trim();
                   _selectSchool(value, schoolName: schoolName);
                 },
-          validator: (value) =>
-              value == null ? 'Pilih sekolah terdaftar' : null,
+          validator: (value) {
+            if (locked && _selectedSchoolId != null) return null;
+
+            return value == null ? 'Pilih sekolah terdaftar' : null;
+          },
         );
       },
     );

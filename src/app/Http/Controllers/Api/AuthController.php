@@ -281,9 +281,18 @@ class AuthController extends Controller
 
         DB::transaction(function () use ($user, $data) {
             $role = $data['role'];
-            $schoolId = in_array($role, ['teacher', 'student'], true)
-                ? ($data['school_id'] ?? $user->school_id)
-                : null;
+            $schoolId = null;
+
+            if (in_array($role, ['teacher', 'student'], true)) {
+                if ($user->school_id && filled($data['school_id'] ?? null) && (int) $data['school_id'] !== (int) $user->school_id) {
+                    abort(422, 'Sekolah akun sudah ditentukan dan tidak dapat diganti.');
+                }
+
+                $schoolId = $user->school_id ?: ($data['school_id'] ?? null);
+
+                abort_if(blank($schoolId), 422, 'Sekolah wajib dipilih.');
+            }
+
             $profileData = array_replace($data, ['school_id' => $schoolId]);
 
             $student = $data['role'] === 'parent'

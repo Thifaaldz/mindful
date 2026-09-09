@@ -16,7 +16,7 @@ use Spatie\Permission\Models\Role;
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
-    foreach (['super_admin', 'school_admin', 'teacher', 'student', 'parent'] as $role) {
+    foreach (['super_admin', 'admin', 'school_admin', 'teacher', 'student', 'parent'] as $role) {
         Role::create(['name' => $role]);
     }
 });
@@ -88,6 +88,10 @@ test('super admin approval creates school admin access without changing admin pa
         'email' => 'super@mindfuledu.test',
     ]);
     $superAdmin->assignRole('super_admin');
+    $legacyAdmin = User::factory()->create([
+        'email' => 'legacy-admin@mindfuledu.test',
+    ]);
+    $legacyAdmin->assignRole('admin');
 
     $school = School::create([
         'name' => 'SD Mindful Approved',
@@ -113,7 +117,9 @@ test('super admin approval creates school admin access without changing admin pa
         ->and($superAdmin->canAccessPanel(Filament::getPanel('admin')))->toBeTrue()
         ->and($superAdmin->canAccessPanel(Filament::getPanel('school')))->toBeFalse()
         ->and($schoolAdmin->canAccessPanel(Filament::getPanel('school')))->toBeTrue()
-        ->and($schoolAdmin->canAccessPanel(Filament::getPanel('admin')))->toBeFalse();
+        ->and($schoolAdmin->canAccessPanel(Filament::getPanel('admin')))->toBeFalse()
+        ->and($legacyAdmin->canAccessPanel(Filament::getPanel('admin')))->toBeFalse()
+        ->and($legacyAdmin->canAccessPanel(Filament::getPanel('school')))->toBeFalse();
 });
 
 test('public dropdown endpoints expose approved schools and active classes only', function () {
