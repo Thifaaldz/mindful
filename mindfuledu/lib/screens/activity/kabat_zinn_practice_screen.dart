@@ -222,6 +222,7 @@ class _KabatZinnPracticeScreenState extends State<KabatZinnPracticeScreen>
     final activeStep = _method.steps.isEmpty
         ? 0
         : _activeStep.clamp(0, _method.steps.length - 1).toInt();
+    final practiceChoices = _method.choices;
     final stepProgress = _stepDurations.isEmpty
         ? 0.0
         : (1 -
@@ -270,7 +271,14 @@ class _KabatZinnPracticeScreenState extends State<KabatZinnPracticeScreen>
             Text(_method.reason, style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 20),
             if (!_started) ...[
-              _KnowledgeCard(method: _method, onStart: _startPractice),
+              if (practiceChoices.isNotEmpty)
+                _PracticeChoiceCard(
+                  parent: _method,
+                  choices: practiceChoices,
+                  onSelected: _setMethod,
+                )
+              else
+                _KnowledgeCard(method: _method, onStart: _startPractice),
               const SizedBox(height: 20),
             ] else ...[
               _AnimatedPractice(
@@ -896,6 +904,69 @@ class _AlternativesCard extends StatelessWidget {
   }
 }
 
+class _PracticeChoiceCard extends StatelessWidget {
+  const _PracticeChoiceCard({
+    required this.parent,
+    required this.choices,
+    required this.onSelected,
+  });
+
+  final _PracticeMethod parent;
+  final List<_PracticeMethod> choices;
+  final ValueChanged<_PracticeMethod> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SoftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                backgroundColor: AppTheme.mint,
+                child: Icon(parent.icon, color: AppTheme.olive),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Pilih latihan',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(parent.knowledge),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          for (final choice in choices)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundColor: const Color(0xFFF0F0EF),
+                  child: Icon(choice.icon, color: AppTheme.olive),
+                ),
+                title: Text(choice.title),
+                subtitle: Text('${choice.duration.inMinutes} menit'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => onSelected(choice),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _EvaluationSheet extends StatelessWidget {
   const _EvaluationSheet({required this.onSelected});
 
@@ -991,6 +1062,7 @@ enum _PracticeKind {
   bodyScan,
   walking,
   movement,
+  informal,
   lovingKindness,
   stop,
   grounding,
@@ -1007,6 +1079,7 @@ class _PracticeMethod {
     required this.knowledge,
     required this.steps,
     this.assetKey,
+    this.choices = const [],
   });
 
   final String title;
@@ -1017,6 +1090,7 @@ class _PracticeMethod {
   final String knowledge;
   final List<String> steps;
   final String? assetKey;
+  final List<_PracticeMethod> choices;
 
   _PracticeMethod copyWith({
     String? title,
@@ -1027,6 +1101,7 @@ class _PracticeMethod {
     String? knowledge,
     List<String>? steps,
     String? assetKey,
+    List<_PracticeMethod>? choices,
   }) {
     return _PracticeMethod(
       title: title ?? this.title,
@@ -1037,6 +1112,7 @@ class _PracticeMethod {
       knowledge: knowledge ?? this.knowledge,
       steps: steps ?? this.steps,
       assetKey: assetKey ?? this.assetKey,
+      choices: choices ?? this.choices,
     );
   }
 
@@ -1070,6 +1146,11 @@ class _PracticeMethod {
       return value < 0.5
           ? 'Gerakkan tubuh dengan lembut mengikuti napas.'
           : 'Rasakan area yang tegang tanpa memaksa.';
+    }
+    if (kind == _PracticeKind.informal) {
+      return value < 0.5
+          ? 'Perlambat aktivitas dan sadari sensasinya.'
+          : 'Kembali ke pengalaman sederhana yang sedang dilakukan.';
     }
     if (kind == _PracticeKind.lovingKindness) {
       return value < 0.5
@@ -1197,6 +1278,20 @@ _PracticeMethod _methodFromTactic(Map<String, dynamic> tactic) {
   final fallback = _methodForCode(code);
   final steps = _stringList(tactic['steps']);
 
+  if (code == 'informal_mindfulness') {
+    return fallback.copyWith(
+      title: _textValue(tactic['title'], fallback.title),
+      duration: Duration(
+        minutes: _intValue(
+          tactic['duration_minutes'],
+          fallback.duration.inMinutes,
+        ),
+      ),
+      reason: _textValue(tactic['description'], fallback.reason),
+      knowledge: _textValue(tactic['knowledge'], fallback.knowledge),
+    );
+  }
+
   return fallback.copyWith(
     title: _textValue(tactic['title'], fallback.title),
     duration: Duration(
@@ -1322,23 +1417,70 @@ _PracticeMethod _informal(int minutes) {
   return _PracticeMethod(
     title: 'Informal Mindfulness',
     duration: Duration(minutes: minutes),
-    kind: _PracticeKind.walking,
+    kind: _PracticeKind.informal,
     icon: Icons.local_cafe_outlined,
     reason:
         'Cocok saat kondisi masih terkendali dan latihan ingin dibuat ringan dalam aktivitas sehari-hari.',
     knowledge:
-        'Informal mindfulness membawa perhatian penuh ke aktivitas sederhana. Ini berguna ketika pengguna tidak punya banyak waktu tetapi tetap butuh kembali hadir.',
-    assetKey: 'informal_mindfulness',
+        'Informal mindfulness membawa perhatian penuh ke aktivitas sederhana. Pilih salah satu latihan pendek: minum sadar, makan sadar, atau berjalan sadar.',
+    steps: const ['Pilih latihan minum, makan, atau berjalan.'],
+    choices: [_informalDrinking(), _informalEating(), _informalWalkingClass()],
+  );
+}
+
+_PracticeMethod _informalDrinking() {
+  return _PracticeMethod(
+    title: 'Minum Sadar',
+    duration: const Duration(minutes: 2),
+    kind: _PracticeKind.informal,
+    icon: Icons.local_drink_outlined,
+    reason:
+        'Cocok untuk jeda sangat singkat saat ingin kembali hadir tanpa meninggalkan aktivitas.',
+    knowledge:
+        'Minum sadar memakai gelas dan sensasi menelan sebagai anchor. Latihan ini membantu perhatian kembali ke tubuh melalui aktivitas yang sederhana.',
+    assetKey: 'informal_drinking',
     steps: const [
       'Pegang gelas dan sadari suhu pada tangan.',
       'Perhatikan warna dan aroma minuman.',
       'Minum perlahan dengan perhatian penuh.',
       'Sadari sensasi setelah menelan.',
+    ],
+  );
+}
+
+_PracticeMethod _informalEating() {
+  return _PracticeMethod(
+    title: 'Makan Sadar',
+    duration: const Duration(minutes: 3),
+    kind: _PracticeKind.informal,
+    icon: Icons.restaurant_outlined,
+    reason:
+        'Cocok saat makan terburu-buru, pikiran penuh, atau ingin menutup aktivitas dengan lebih pelan.',
+    knowledge:
+        'Makan sadar melatih perhatian pada warna, aroma, rasa, tekstur, dan sinyal tubuh saat makan. Tujuannya bukan mengatur makan, tetapi hadir pada pengalaman sederhana.',
+    assetKey: 'informal_eating',
+    steps: const [
       'Perhatikan warna, bentuk, dan aroma makanan.',
       'Ambil satu suapan secara sadar.',
       'Kunyah perlahan tanpa terburu-buru.',
       'Sadari rasa dan tekstur makanan.',
       'Sadari kondisi tubuh setelah makan.',
+    ],
+  );
+}
+
+_PracticeMethod _informalWalkingClass() {
+  return _PracticeMethod(
+    title: 'Berjalan Sadar',
+    duration: const Duration(minutes: 2),
+    kind: _PracticeKind.walking,
+    icon: Icons.directions_walk,
+    reason:
+        'Cocok ketika berpindah kelas, menuju ruangan lain, atau butuh jeda aktif yang tetap ringan.',
+    knowledge:
+        'Berjalan sadar memakai langkah, napas, dan lingkungan sebagai anchor. Latihan ini membantu pengguna hadir saat berpindah tempat.',
+    assetKey: 'informal_walking_class',
+    steps: const [
       'Saat berjalan ke kelas, sadari langkah kaki.',
       'Sadari napas selama berjalan.',
       'Sadari lingkungan sekitar tanpa membuka ponsel jika memungkinkan.',
@@ -1670,6 +1812,9 @@ String? _assetKeyForCode(String code) {
     'loving_kindness' => 'loving_kindness',
     'mountain_meditation' => 'mountain_meditation',
     'informal_mindfulness' => 'informal_mindfulness',
+    'informal_drinking' => 'informal_drinking',
+    'informal_eating' => 'informal_eating',
+    'informal_walking_class' => 'informal_walking_class',
     'reflective_journal' => 'reflective_journal',
     _ => null,
   };
@@ -1812,6 +1957,24 @@ const Map<String, List<String>> _mindfulnessStepAssets = {
     'mountain_meditation_04_thoughts_emotions_change.png',
     'mountain_meditation_05_stable_body.png',
     'mountain_meditation_06_close.png',
+  ],
+  'informal_drinking': [
+    'informal_drinking_01_hold_cup.png',
+    'informal_drinking_02_notice_color_aroma.png',
+    'informal_drinking_03_drink_slowly.png',
+    'informal_drinking_04_notice_after_swallow.png',
+  ],
+  'informal_eating': [
+    'informal_eating_01_notice_food.png',
+    'informal_eating_02_take_one_bite.png',
+    'informal_eating_03_chew_slowly.png',
+    'informal_eating_04_notice_taste_texture.png',
+    'informal_eating_05_notice_body.png',
+  ],
+  'informal_walking_class': [
+    'informal_walking_class_01_notice_steps.png',
+    'informal_walking_class_02_notice_breath.png',
+    'informal_walking_class_03_notice_environment.png',
   ],
   'informal_mindfulness': [
     'informal_drinking_01_hold_cup.png',

@@ -334,6 +334,7 @@ IconData _iconFor(String code) {
     'walking_meditation' => Icons.directions_walk,
     'rain_self_compassion' => Icons.umbrella_outlined,
     'loving_kindness' => Icons.favorite_border,
+    'informal_mindfulness' => Icons.local_cafe_outlined,
     'reflective_journal' => Icons.edit_note,
     _ => Icons.lightbulb_outline,
   };
@@ -344,7 +345,9 @@ Color _colorFor(String code) {
     'grounding_321' => const Color(0xFF24718E),
     'breathing_478' || 'breathing_space_3min' => const Color(0xFF3B7C61),
     'body_scan_micro' || 'body_scan_full' => const Color(0xFF6A6E3D),
-    'mindful_movement' || 'walking_meditation' => const Color(0xFF8D6B32),
+    'mindful_movement' ||
+    'walking_meditation' ||
+    'informal_mindfulness' => const Color(0xFF8D6B32),
     'rain_self_compassion' || 'loving_kindness' => const Color(0xFF9A4F64),
     'reflective_journal' => const Color(0xFF5A6B8C),
     _ => AppTheme.olive,

@@ -26,9 +26,9 @@ class SchoolApprovedNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Pendaftaran Sekolah MindfullEdu Disetujui')
+            ->subject('Pendaftaran Sekolah MindfulEdu Disetujui')
             ->greeting('Halo '.$this->school->contact_name.',')
-            ->line('Pendaftaran sekolah Anda di MindfullEdu telah disetujui.')
+            ->line('Pendaftaran sekolah Anda di MindfulEdu telah disetujui.')
             ->line('Sekolah: '.$this->school->name)
             ->line('Akun Administrator Sekolah:')
             ->line('Email / Username: '.$this->loginEmail)
