@@ -1287,6 +1287,7 @@ _PracticeMethod _breathingSpace() {
         'Cocok sebagai transisi pendek sebelum atau setelah aktivitas yang menguras perhatian.',
     knowledge:
         '3-Minute Breathing Space membantu pengguna berhenti sebentar, mengenali kondisi, lalu memperluas kesadaran tubuh sebelum melanjutkan aktivitas.',
+    assetKey: 'breathing_space_3min',
     steps: const [
       'Menit pertama: sadari apa yang sedang dirasakan.',
       'Menit kedua: fokus pada napas masuk dan keluar.',
@@ -1306,6 +1307,7 @@ _PracticeMethod _awareness() {
         'Cocok untuk menjaga fokus dan menstabilkan ritme sebelum masuk aktivitas berikutnya.',
     knowledge:
         'Awareness of Breathing melatih hadir pada napas natural tanpa mengubahnya. Saat perhatian berpindah, pengguna cukup sadar lalu kembali.',
+    assetKey: 'maintain_breath_awareness',
     steps: const [
       'Duduk stabil dengan punggung nyaman.',
       'Rasakan napas masuk sebagaimana adanya.',
@@ -1537,6 +1539,7 @@ _PracticeMethod _stop() {
         'Cocok saat emosi naik, ingin bereaksi cepat, atau perlu mengambil keputusan dengan lebih tenang.',
     knowledge:
         'STOP memberi jeda pendek antara pemicu dan respons. Pengguna berhenti, bernapas, mengamati pengalaman saat ini, lalu melanjutkan dengan pilihan yang lebih sadar.',
+    assetKey: 'stop_technique',
     steps: const [
       'Stop: hentikan aktivitas sejenak.',
       'Take a breath: tarik dan hembuskan napas perlahan.',
@@ -1555,6 +1558,7 @@ _PracticeMethod _grounding() {
     reason: 'Cocok saat cemas, panik, atau pikiran terasa terlalu penuh.',
     knowledge:
         'Grounding mengajak perhatian kembali ke lingkungan nyata melalui pancaindra. Ini membantu tubuh menetap saat pikiran bergerak terlalu cepat.',
+    assetKey: 'grounding_321',
     steps: const [
       'Sebutkan tiga hal yang terlihat di sekitar.',
       'Sebutkan dua suara yang terdengar saat ini.',
@@ -1574,6 +1578,7 @@ _PracticeMethod _breathing478() {
         'Cocok untuk cemas, tegang, sulit tidur, atau butuh menurunkan aktivasi tubuh.',
     knowledge:
         'Napas 4-7-8 memakai hembusan lebih panjang untuk memberi sinyal aman pada tubuh. Tarik napas 4 hitungan, tahan 7 hitungan, lalu buang 8 hitungan.',
+    assetKey: 'breathing_478',
     steps: const [
       'Duduk nyaman dan rilekskan bahu.',
       'Tarik napas selama 4 hitungan.',
@@ -1594,6 +1599,7 @@ _PracticeMethod _rain() {
         'Cocok ketika emosi berat, frustrasi, atau tekanan dari jurnal terasa kuat.',
     knowledge:
         'RAIN berarti Recognize, Allow, Investigate, dan Nurture. Pengguna mengenali emosi, mengizinkannya hadir, merasakan jejaknya di tubuh, lalu merawat diri dengan lembut.',
+    assetKey: 'rain_self_compassion',
     steps: const [
       'Recognize: kenali emosi yang sedang muncul.',
       'Allow: izinkan emosi hadir tanpa dilawan.',
@@ -1614,6 +1620,7 @@ _PracticeMethod _journal() {
         'Cocok saat pengguna perlu membaca pola emosi dan beban dari aktivitas harian.',
     knowledge:
         'Jurnal reflektif mengubah pengalaman menjadi informasi yang lebih jelas. Teknik ini membantu rekomendasi berikutnya makin sesuai dengan pola pengguna.',
+    assetKey: 'reflective_journal',
     steps: const [
       'Tulis satu hal yang paling menguras energi hari ini.',
       'Tulis perasaan yang paling dominan.',
@@ -1648,15 +1655,22 @@ String? _assetKeyForCode(String code) {
   return switch (code) {
     'mindful_breathing' => 'mindful_breathing',
     'focused_attention' => 'focused_attention',
+    'stop_technique' => 'stop_technique',
+    'grounding_321' => 'grounding_321',
+    'breathing_478' => 'breathing_478',
+    'breathing_space_3min' => 'breathing_space_3min',
+    'maintain_breath_awareness' => 'maintain_breath_awareness',
     'body_scan_micro' || 'body_scan_full' => 'body_scan',
     'sitting_meditation' => 'sitting_meditation',
     'mindful_movement' => 'mindful_movement',
     'walking_meditation' => 'walking_meditation',
     'open_monitoring' => 'open_monitoring',
     'mindfulness_of_sounds' => 'sounds',
+    'rain_self_compassion' => 'rain_self_compassion',
     'loving_kindness' => 'loving_kindness',
     'mountain_meditation' => 'mountain_meditation',
     'informal_mindfulness' => 'informal_mindfulness',
+    'reflective_journal' => 'reflective_journal',
     _ => null,
   };
 }
@@ -1689,6 +1703,38 @@ const Map<String, List<String>> _mindfulnessStepAssets = {
     'focused_attention_02_hold_focus.png',
     'focused_attention_03_label_and_return.png',
     'focused_attention_04_closing.png',
+  ],
+  'stop_technique': [
+    'stop_technique_01_stop.png',
+    'stop_technique_02_take_breath.png',
+    'stop_technique_03_observe.png',
+    'stop_technique_04_proceed.png',
+  ],
+  'grounding_321': [
+    'grounding_321_01_see_three.png',
+    'grounding_321_02_hear_two.png',
+    'grounding_321_03_feel_one.png',
+    'grounding_321_04_settle.png',
+  ],
+  'breathing_478': [
+    'breathing_478_01_prepare.png',
+    'breathing_478_02_inhale_4.png',
+    'breathing_478_03_hold_7.png',
+    'breathing_478_04_exhale_8.png',
+    'breathing_478_05_repeat.png',
+  ],
+  'breathing_space_3min': [
+    'breathing_space_3min_01_awareness.png',
+    'breathing_space_3min_02_breath.png',
+    'breathing_space_3min_03_expand_body.png',
+    'breathing_space_3min_04_intention.png',
+  ],
+  'maintain_breath_awareness': [
+    'maintain_breath_awareness_01_sit_stable.png',
+    'maintain_breath_awareness_02_in_breath.png',
+    'maintain_breath_awareness_03_out_breath.png',
+    'maintain_breath_awareness_04_return.png',
+    'maintain_breath_awareness_05_long_breath.png',
   ],
   'body_scan': [
     'body_scan_01_preparation.png',
@@ -1744,6 +1790,13 @@ const Map<String, List<String>> _mindfulnessStepAssets = {
     'sounds_03_far_sounds.png',
     'sounds_04_sound_appears_changes_fades.png',
     'sounds_05_return_to_breath.png',
+  ],
+  'rain_self_compassion': [
+    'rain_self_compassion_01_recognize.png',
+    'rain_self_compassion_02_allow.png',
+    'rain_self_compassion_03_investigate.png',
+    'rain_self_compassion_04_nurture.png',
+    'rain_self_compassion_05_safe_step.png',
   ],
   'loving_kindness': [
     'loving_kindness_01_stabilize.png',

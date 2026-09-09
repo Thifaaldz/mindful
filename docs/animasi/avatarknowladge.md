@@ -35,16 +35,18 @@ breathing_478_04_exhale_8.png
 
 | No | Teknik | Category | Durasi | Jumlah Step | Status Asset |
 |---:|---|---|---:|---:|---|
-| 1 | Teknik STOP | `stop_technique` | 2 menit | 4 | Belum ada |
-| 2 | Grounding 3-2-1 | `grounding_321` | 3 menit | 4 | Belum ada |
-| 3 | Napas 4-7-8 | `breathing_478` | 5 menit | 5 | Belum ada |
-| 4 | Jeda Napas 3 Menit | `breathing_space_3min` | 3 menit | 4 | Belum ada |
-| 5 | Awareness of Breathing | `maintain_breath_awareness` | 3 menit | 5 | Belum ada |
-| 6 | RAIN | `rain_self_compassion` | 7 menit | 5 | Belum ada |
+| 1 | Teknik STOP | `stop_technique` | 2 menit | 4 | Sudah dipasang |
+| 2 | Grounding 3-2-1 | `grounding_321` | 3 menit | 4 | Sudah dipasang |
+| 3 | Napas 4-7-8 | `breathing_478` | 5 menit | 5 | Sudah dipasang |
+| 4 | Jeda Napas 3 Menit | `breathing_space_3min` | 3 menit | 4 | Sudah dipasang |
+| 5 | Awareness of Breathing | `maintain_breath_awareness` | 3 menit | 5 | Sudah dipasang |
+| 6 | RAIN | `rain_self_compassion` | 7 menit | 5 | Sudah dipasang |
 | 7 | Jurnal Reflektif Harian | `reflective_journal` | 5 menit | 5 | Belum ada |
 |  | Total |  |  | 32 step | 32 gambar dibutuhkan |
 
 Total gambar baru yang dibutuhkan: **32 PNG**.
+Total gambar yang sudah dipasang ke aplikasi: **27 PNG**.
+Sisa gambar yang belum ada: **5 PNG** untuk Jurnal Reflektif Harian.
 
 ---
 
@@ -489,12 +491,13 @@ reflective_journal_05_tomorrow_plan.png
 ## Checklist Setelah Asset Dibuat
 
 ```text
-[ ] 32 gambar PNG sudah dibuat
-[ ] Nama file sesuai daftar standar
-[ ] Semua gambar dipindah ke mindfuledu/assets/images/mindfulness/
-[ ] pubspec.yaml sudah include assets/images/mindfulness/
-[ ] Mapping asset ditambahkan di kabat_zinn_practice_screen.dart
-[ ] Setiap category punya assetKey
+[x] 27 gambar PNG teknik 12-17 sudah dibuat
+[x] Nama file teknik 12-17 sesuai daftar standar
+[x] Semua gambar teknik 12-17 dipindah ke mindfuledu/assets/images/mindfulness/
+[x] pubspec.yaml sudah include assets/images/mindfulness/
+[x] Mapping asset teknik 12-17 ditambahkan di kabat_zinn_practice_screen.dart
+[x] Setiap category tambahan punya assetKey
+[ ] 5 gambar Jurnal Reflektif Harian sudah dibuat
 [ ] Flutter analyze sukses
 [ ] Guided practice dicek di emulator/perangkat
 [ ] Tidak ada gambar yang terpotong di layar kecil
