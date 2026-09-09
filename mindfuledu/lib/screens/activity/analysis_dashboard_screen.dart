@@ -1746,18 +1746,21 @@ Map<String, dynamic> _latestActivityRecommendation(
 
   final title = '${tactic['title'] ?? recommendation['practice_title'] ?? ''}'
       .trim();
-  final activityTitle = '${latestReview['title'] ?? 'activity terakhir'}'
-      .trim();
   final description =
       '${tactic['description'] ?? tactic['practice'] ?? recommendation['practice'] ?? ''}'
           .trim();
+  final periodContext = _periodRecommendationContext(
+    '${snapshot?['period_type'] ?? 'daily'}',
+  );
 
   return {
     ...recommendation,
-    'headline': 'Rekomendasi dari activity terakhir',
+    'headline': 'Rekomendasi dari $periodContext',
     'action': title.isEmpty
-        ? 'Berdasarkan activity terakhir "$activityTitle", kami menyarankan teknik mindfulness yang paling sesuai.'
-        : 'Berdasarkan activity terakhir "$activityTitle", kami menyarankan $title sebagai teknik yang paling sesuai.',
+        ? 'Berdasarkan $periodContext, kami menyarankan teknik mindfulness yang paling sesuai.'
+        : 'Berdasarkan $periodContext, kami menyarankan $title sebagai teknik yang paling sesuai.',
+    'analysis_review':
+        'Kesimpulan ini dirangkum dari activity, mood, dan jurnal pada $periodContext.',
     'practice_code':
         tactic['code'] ?? tactic['category'] ?? recommendation['practice_code'],
     'practice_title': title.isEmpty ? recommendation['practice_title'] : title,
@@ -1768,6 +1771,14 @@ Map<String, dynamic> _latestActivityRecommendation(
     'why_this_tactic':
         tactic['why_this_tactic'] ?? recommendation['why_this_tactic'],
     'tactic': tactic,
+  };
+}
+
+String _periodRecommendationContext(String periodType) {
+  return switch (periodType) {
+    'weekly' => 'kegiatan Anda minggu ini',
+    'monthly' => 'kegiatan Anda bulan ini',
+    _ => 'kegiatan Anda hari ini',
   };
 }
 

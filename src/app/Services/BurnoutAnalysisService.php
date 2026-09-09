@@ -355,7 +355,7 @@ class BurnoutAnalysisService
         $recommendation = is_array($mlScore['recommendation_summary'] ?? null)
             ? $mlScore['recommendation_summary']
             : $this->recommendation($category, $dominantFactors, $user, $tacticCatalog);
-        $recommendation = $this->alignRecommendationWithJournalReview($recommendation, $journalRows, $tacticCatalog);
+        $recommendation = $this->alignRecommendationWithJournalReview($recommendation, $journalRows, $tacticCatalog, $periodType);
         $recommendation = $this->enrichRecommendationWithTactic($recommendation, $category, $dominantFactors, $user, $tacticCatalog);
         $recommendationCodes = array_values(array_unique($recommendation['codes'] ?? []));
         if ($recommendationCodes === [] && is_array($mlScore['recommendation_codes'] ?? null)) {
@@ -1193,7 +1193,7 @@ class BurnoutAnalysisService
         return $recommendation;
     }
 
-    private function alignRecommendationWithJournalReview(array $recommendation, Collection $journalRows, array $tacticCatalog): array
+    private function alignRecommendationWithJournalReview(array $recommendation, Collection $journalRows, array $tacticCatalog, string $periodType): array
     {
         $activity = $this->latestJournalActivity($journalRows);
 
@@ -1207,11 +1207,11 @@ class BurnoutAnalysisService
         }
 
         $activityScore = $this->activityRiskScore($activity);
-        $activityTitle = trim((string) $activity->title) ?: 'activity terakhir';
         $tacticTitle = trim((string) ($tactic['title'] ?? 'teknik mindfulness')) ?: 'teknik mindfulness';
+        $periodContext = $this->periodRecommendationContext($periodType);
 
-        $recommendation['headline'] = 'Rekomendasi dari activity terakhir';
-        $recommendation['action'] = "Berdasarkan activity terakhir \"{$activityTitle}\", kami menyarankan {$tacticTitle} sebagai teknik yang paling sesuai.";
+        $recommendation['headline'] = "Rekomendasi dari {$periodContext}";
+        $recommendation['action'] = "Berdasarkan {$periodContext}, kami menyarankan {$tacticTitle} sebagai teknik yang paling sesuai.";
         $recommendation['practice_code'] = $tactic['code'];
         $recommendation['practice_title'] = $tactic['title'];
         $recommendation['practice'] = $tactic['description'];
@@ -1219,9 +1219,9 @@ class BurnoutAnalysisService
         $recommendation['why_this_tactic'] = $tactic['why_this_tactic'];
         $recommendation['tactic'] = $tactic;
         $recommendation['source'] = $tactic['source'] ?? ($recommendation['source'] ?? 'activity-journal');
-        $recommendation['analysis_review'] = 'Teknik utama diambil dari jurnal activity terakhir agar rekomendasi pada kesimpulan dan tombol latihan tetap sama.';
+        $recommendation['analysis_review'] = "Kesimpulan ini dirangkum dari activity, mood, dan jurnal pada {$periodContext}.";
         $recommendation['risk_reduction_steps'] = [
-            "Buka {$tacticTitle} dari rekomendasi activity terakhir.",
+            "Buka {$tacticTitle} dari rekomendasi analisis ini.",
             'Ikuti panduan step-by-step sampai selesai.',
             'Catat perubahan kondisi setelah latihan bila diperlukan.',
         ];
@@ -1240,6 +1240,15 @@ class BurnoutAnalysisService
         ]));
 
         return $recommendation;
+    }
+
+    private function periodRecommendationContext(string $periodType): string
+    {
+        return match ($periodType) {
+            'weekly' => 'kegiatan Anda minggu ini',
+            'monthly' => 'kegiatan Anda bulan ini',
+            default => 'kegiatan Anda hari ini',
+        };
     }
 
     private function movementFromTactic(array $tactic): string
