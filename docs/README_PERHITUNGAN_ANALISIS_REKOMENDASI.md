@@ -7,7 +7,7 @@ Dokumen ini bersifat teknis-operasional. Nilai di bawah adalah estimasi berdasar
 Versi perhitungan saat ini:
 
 ```text
-scoring-v2.4-mbsr
+scoring-v2.5-edumindful
 ```
 
 ---
@@ -26,7 +26,7 @@ User membuat activity
   -> analisis harian/mingguan/bulanan menghitung workload score dari TAH x IF
   -> sistem menghitung wellbeing score dari mood, jurnal, dimensi burnout, dan self report
   -> final burnout risk score dibuat
-  -> rekomendasi mindfulness utama mengikuti kesimpulan kegiatan pada periode tersebut
+  -> rekomendasi mindfulness utama mengikuti category dan dominant factors periode tersebut
 ```
 
 Formula workload:
@@ -40,8 +40,9 @@ Burnout_Weekly =
   x 100%
 
 Burnout_Monthly =
-  Σ Burnout_Daily selama sebulan
-  / Jumlah_hari_kerja_aktif
+  Σ(TAH_harian x IF_rata-rata_harian)
+  / (30 x Max_Daily_Capacity)
+  x 100%
 ```
 
 Di sistem, nilai tersebut disimpan sebagai `workload_score_raw`. Setelah itu final score tetap digabung dengan sinyal wellbeing:
@@ -58,12 +59,13 @@ Syarat final score dihitung:
 
 Jika belum cukup data, sistem menampilkan status `Data belum cukup` dan menyarankan user melengkapi check-in, check-out, dan jurnal.
 
-Aturan hijau/positif:
+Aturan hijau/positif gaya edumindful:
 
-- activity `senang -> senang`, `senang -> tenang`, atau mood stabil positif tidak menaikkan skor burnout jika jurnal tidak punya kata tekanan;
-- activity tetap masuk `activity_count`, `completed_activity_count`, `journal_count`, dan `activity_breakdown`;
-- activity tidak masuk `journal_reviews`, tidak diberi rekomendasi risiko, dan `Activity Risk Score` menjadi 0;
-- pengecualian: workload periode tetap bisa menaikkan risiko jika beban sudah padat, yaitu `workload_score_raw >= 80`.
+- activity `senang -> senang`, `senang -> tenang`, atau mood stabil positif tidak menambah `Wellbeing Score` jika jurnal tidak punya kata tekanan;
+- workload dari durasi aktual tetap dihitung karena aktivitas tetap memakai energi;
+- activity tetap masuk `activity_count`, `completed_activity_count`, `journal_count`, `activity_breakdown`, dan `journal_reviews`;
+- final score tidak dipaksa menjadi 0 selama sudah ada check-out/jurnal;
+- contoh activity positif 2 jam mengajar: `Workload = 2 x 1.4 / 8 x 100 = 35`, `Wellbeing = 0`, `Final = 17.5`, kategori tetap hijau.
 
 ---
 
@@ -206,16 +208,25 @@ Kapasitas harian default:
 Formula:
 
 ```text
-Workload Score = weighted actual hours / period capacity hours x 100
+Workload Score = min(100, weighted actual hours / period capacity hours x 100)
 ```
 
 Period capacity:
 
-| Periode | Kapasitas |
-|---|---:|
-| Harian | 8 jam |
-| Mingguan | 7 x 8 jam = 56 jam |
-| Bulanan | jumlah hari kerja aktif x 8 jam |
+| Periode | Rentang Data | Kapasitas |
+|---|---|---:|
+| Harian | Tanggal yang dipilih | 8 jam |
+| Mingguan | 7 hari terakhir sampai tanggal yang dipilih | 7 x 8 jam = 56 jam |
+| Bulanan | 30 hari terakhir sampai tanggal yang dipilih | 30 x 8 jam = 240 jam |
+
+Perbedaan dari versi lama MindfulEdu:
+
+| Periode | Versi Lama MindfulEdu | Versi v2.5 Edumindful |
+|---|---|---|
+| Mingguan | Minggu kalender saat ini | 7 hari terakhir |
+| Kapasitas mingguan | 7 x 8 = 56 jam | 7 x 8 = 56 jam |
+| Bulanan | Bulan kalender saat ini | 30 hari terakhir |
+| Kapasitas bulanan | Hari aktif selesai x 8 jam | 30 x 8 = 240 jam |
 
 Actual hours:
 
@@ -315,8 +326,8 @@ Tabel ini adalah estimasi `Wellbeing Score`, bukan final score.
 Catatan:
 
 - nilai `0` pada kombinasi hijau seperti `senang -> senang` berarti tidak ada tekanan wellbeing;
-- jika workload juga belum padat, final score akan dipaksa tetap 0/hijau;
-- aktivitas positif tetap tercatat sebagai aktivitas dan jurnal, tetapi tidak masuk review risiko.
+- final score tetap dapat naik dari workload aktual, walaupun biasanya masih hijau jika durasi dan IF tidak tinggi;
+- aktivitas positif tetap tercatat sebagai aktivitas, jurnal, review, dan breakdown.
 
 Contoh yang ditanyakan:
 
@@ -353,7 +364,7 @@ Formula ringkas:
 
 ```text
 Activity Risk Score =
-  base workload activity jika ada sinyal burnout
+  base workload activity
   + mood check-in negatif
   + mood check-out negatif
   + kata tekanan jurnal
@@ -365,7 +376,6 @@ Detail:
 
 | Komponen | Poin |
 |---|---:|
-| Tidak ada sinyal burnout | 0 |
 | Base workload activity | min(35, effective_hours x IF / 8 x 100) |
 | Check-in cemas/sedih/marah | 10 + intensity/10 x 10 |
 | Check-out cemas/sedih/marah | +20 |
@@ -383,7 +393,7 @@ Sinyal burnout pada activity:
 - ada dimensi burnout manual/otomatis;
 - ada crisis flag.
 
-Jika tidak ada sinyal di atas, contoh `senang -> senang` dengan jurnal positif akan menghasilkan `Activity Risk Score = 0`.
+Jika tidak ada sinyal di atas, contoh `senang -> senang` dengan jurnal positif tetap mendapat skor workload activity. Skor ini biasanya kecil sampai sedang dan tetap berada di kategori hijau selama durasi/IF tidak tinggi.
 
 Contoh `senang -> marah`:
 
@@ -412,10 +422,11 @@ Risk floor:
 - jika ada `checkout_negative_mood`, `journal_pressure_terms`, `teacher_self_report_high`, atau `high_wellbeing_pressure`, score minimal dinaikkan ke 40;
 - jika ada crisis flag, final score minimal 75 dan kategori menjadi merah.
 
-Aturan proteksi hijau:
+Catatan hijau:
 
-- jika tidak ada sinyal burnout pada activity maupun self report, dan `workload_score_raw < 80`, final score menjadi 0/hijau;
-- jika workload sudah padat (`workload_score_raw >= 80`), workload tetap boleh menaikkan final score walaupun mood positif.
+- mood positif tidak menambah tekanan wellbeing;
+- workload tetap menambah final score;
+- kategori tetap hijau selama final score berada di bawah 40.
 
 Contoh final:
 
@@ -440,8 +451,7 @@ Kategori = kuning
 ```text
 4 activity intensif masing-masing 2 jam, IF 1.5
 Weighted hours = 12
-Workload = 12 / 8 x 100 = 150
-Final workload component memakai min(100, 150)
+Workload = min(100, 12 / 8 x 100) = 100
 Jika wellbeing juga tinggi, kategori bisa merah
 ```
 
@@ -453,28 +463,29 @@ Dominant factors adalah alasan utama kenapa sistem memberi kategori/rekomendasi 
 
 | Factor | Kondisi Muncul |
 |---|---|
-| workload_over_capacity | Workload Score > 100 |
+| workload_over_capacity | Tidak muncul pada v2.5 karena Workload Score sudah dicap maksimal 100 |
 | dense_workload | Workload Score >= 80 |
 | high_wellbeing_pressure | Wellbeing Score >= 70 |
 | teacher_self_report_high | Rata-rata self report guru >= 7 |
 | crisis_flag | Ada kata/frasa krisis |
 | checkout_negative_mood | >= 50% jurnal check-out negatif |
 | journal_pressure_terms | >= 50% jurnal punya kata tekanan atau dimensi burnout |
-| consecutive_high_intensity | Minimal 2 activity selesai dengan IF >= 1.5 dan ada sinyal burnout atau workload >= 80 |
+| consecutive_high_intensity | Minimal 2 activity selesai dengan IF >= 1.5 |
 | late_activity | Ada activity selesai dengan jam akhir >= 18.00 |
 | balanced_period | Tidak ada faktor dominan lain |
 
 ---
 
-## 12. Rekomendasi Berdasarkan Kegiatan Hari Ini
+## 12. Rekomendasi Berdasarkan Periode
 
-Pada versi terbaru, rekomendasi utama di screen analisis mengikuti kesimpulan periode, misalnya `kegiatan Anda hari ini` untuk analisis harian.
+Pada versi terbaru, rekomendasi utama di screen analisis mengikuti category dan dominant factors pada periode analisis, bukan activity terakhir saja.
 
 Artinya:
 
 - sistem membaca seluruh activity dalam periode;
-- activity positif/stabil tetap menjadi konteks aktivitas, tetapi tidak memaksa rekomendasi risiko;
-- jika ada activity yang punya sinyal burnout, review activity tersebut dipakai untuk memperkaya rekomendasi;
+- activity positif/stabil tetap menjadi konteks aktivitas dan tetap masuk review;
+- activity terakhir yang punya jurnal hanya ditampilkan sebagai `latest_activity_review`;
+- `latest_activity_review` tidak menimpa rekomendasi utama periode;
 - jika tidak ada sinyal burnout, rekomendasi berupa latihan maintenance seperti Awareness of Breathing atau Jeda Napas 3 Menit.
 
 Fallback rule activity jika ada sinyal burnout:
@@ -498,7 +509,7 @@ Catatan production:
 
 ---
 
-## 13. Rekomendasi Berdasarkan Periode
+## 13. Matrix Rekomendasi
 
 Sistem menghitung rekomendasi periode berdasarkan category dan dominant factors.
 
@@ -518,7 +529,7 @@ Rule prioritas periode:
 | 10 | hijau untuk guru | maintain_breath_awareness |
 | 11 | data belum cukup/default | breathing_space_3min |
 
-Pada tampilan analisis terbaru, teknik utama diarahkan ke kesimpulan kegiatan pada periode tersebut.
+Pada tampilan analisis terbaru, teknik utama diarahkan oleh category dan dominant factors periode tersebut.
 
 ---
 
@@ -592,7 +603,7 @@ Wellbeing sekitar 70.5
 Dominant factor bisa high_wellbeing_pressure dan journal_pressure_terms
 Review activity kemungkinan menyarankan Napas 4-7-8
 Jika pressure terms dominan di periode, rekomendasi periode bisa Sitting Meditation
-Tampilan analisis utama tetap berdasarkan kesimpulan kegiatan pada periode tersebut
+Tampilan analisis utama tetap berdasarkan category dan dominant factors periode
 ```
 
 ### 15.3 Cemas Ke Tenang Tetapi Jurnal Masih Berat
@@ -628,10 +639,10 @@ Estimasi:
 
 ```text
 Wellbeing = 0
-Activity Risk Score = 0
+Activity Risk Score mengikuti workload activity
 Activity tetap masuk activity_count, completed_activity_count, journal_count, dan activity_breakdown
-Activity tidak masuk journal_reviews karena tidak ada sinyal burnout
-Final score = 0 dan kategori hijau jika workload_score_raw < 80
+Activity tetap masuk journal_reviews
+Final score berasal dari workload, kategori hijau jika skor di bawah 40
 Rekomendasi utama berupa maintenance, misalnya Awareness of Breathing atau Jeda Napas 3 Menit
 ```
 
@@ -706,7 +717,7 @@ Mood negatif awal = cemas/sedih/marah menambah tekanan.
 Mood negatif akhir = cemas/sedih/marah lebih kuat dampaknya.
 Jurnal berisi stres/lelah/kewalahan bisa membuat check-out dianggap negatif.
 Crisis keyword langsung menaikkan risiko ke merah.
-Workload dihitung dari durasi x intensity factor dibanding kapasitas 8 jam/hari.
+Workload dihitung dari durasi x intensity factor dibanding kapasitas periode: harian 8 jam, mingguan 56 jam, bulanan 240 jam.
 Final score = 50% workload + 50% wellbeing.
-Rekomendasi utama sekarang mengikuti kesimpulan kegiatan pada periode analisis.
+Rekomendasi utama sekarang mengikuti category dan dominant factors periode analisis.
 ```

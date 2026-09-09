@@ -10,11 +10,11 @@ from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
 
-app = FastAPI(title="MindfulEdu Analytics", version="2.4.0")
+app = FastAPI(title="MindfulEdu Analytics", version="2.5.0")
 logger = logging.getLogger("mindfuledu.ml")
 
-SCORING_VERSION = "scoring-v2.4-mbsr"
-MODEL_VERSION = "fastapi-rule-mbsr-v2.4"
+SCORING_VERSION = "scoring-v2.5-edumindful"
+MODEL_VERSION = "fastapi-rule-edumindful-v2.5"
 MAX_SCORE = 100.0
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
@@ -349,21 +349,14 @@ def analyze_journal_endpoint(payload: JournalAnalysisRequest) -> dict[str, Any]:
 def score_burnout(payload: BurnoutScoreRequest) -> dict[str, Any]:
     weighted_planned = sum(item.planned_hours * item.intensity_factor for item in payload.activities)
     weighted_actual = sum(item.actual_hours * item.intensity_factor for item in payload.activities)
-    workload_raw = weighted_actual / payload.period_capacity_hours * 100
+    workload_raw = min(MAX_SCORE, weighted_actual / payload.period_capacity_hours * 100)
     variance = ((weighted_actual - weighted_planned) / weighted_planned * 100) if weighted_planned > 0 else None
 
     completed_journals = [item for item in payload.activities if has_structured_checkout(item)]
     wellbeing = wellbeing_score(payload.activities, payload.self_report_levels)
     data_sufficiency = bool(completed_journals)
-    final_score = min(
-        MAX_SCORE,
-        0.50 * min(MAX_SCORE, workload_raw) + 0.50 * wellbeing,
-    ) if data_sufficiency else None
+    final_score = min(MAX_SCORE, 0.50 * workload_raw + 0.50 * wellbeing) if data_sufficiency else None
     factors = dominant_factors(payload.activities, workload_raw, wellbeing, payload.self_report_levels)
-    if not has_period_burnout_signal(payload.activities, payload.self_report_levels) and workload_raw < 80:
-        wellbeing = 0.0
-        final_score = 0.0 if data_sufficiency else None
-        factors = ["balanced_period"] if data_sufficiency else factors
     if crisis_count(payload.activities) > 0 and final_score is not None:
         final_score = max(final_score, 75.0)
     final_score = apply_risk_floor(final_score, factors)
@@ -393,7 +386,7 @@ def score_burnout(payload: BurnoutScoreRequest) -> dict[str, Any]:
         "recommendation_codes": recommendation["codes"],
         "recommendation_summary": recommendation,
         "calculation": {
-            "formula": "Workload Score = weighted_actual_hours / period_capacity_hours x 100; Final = 50% Workload Score + 50% Wellbeing Score",
+            "formula": "Workload Score = min(100, weighted_actual_hours / period_capacity_hours x 100); Final = 50% Workload Score + 50% Wellbeing Score",
             "workload_score": round(workload_raw, 2),
             "wellbeing_score": round(wellbeing, 2),
             "checkin_negative_ratio": round(checkin_negative_ratio(payload.activities), 2),
@@ -713,7 +706,7 @@ def dominant_factors(
         factors.append("journal_pressure_terms")
 
     high_intensity_count = len([item for item in items if item.intensity_factor >= 1.5])
-    if high_intensity_count >= 2 and (has_burnout_signal_in_items(items) or workload_score >= 80):
+    if high_intensity_count >= 2:
         factors.append("consecutive_high_intensity")
 
     return unique(factors) or ["balanced_period"]
@@ -735,31 +728,6 @@ def burnout_dimensions(item: ActivityFeature) -> list[str]:
         ]
         if dimension in VALID_DIMENSIONS
     ]
-
-
-def has_period_burnout_signal(items: list[ActivityFeature], self_report_levels: list[int] | None = None) -> bool:
-    if has_burnout_signal_in_items(items):
-        return True
-
-    valid_self_reports = [value for value in (self_report_levels or []) if 0 <= value <= 10]
-    if not valid_self_reports:
-        return False
-
-    return sum(valid_self_reports) / len(valid_self_reports) >= 7
-
-
-def has_burnout_signal_in_items(items: list[ActivityFeature]) -> bool:
-    return any(has_burnout_signal(item) for item in items)
-
-
-def has_burnout_signal(item: ActivityFeature) -> bool:
-    return (
-        checkin_negative(item)
-        or checkout_negative(item)
-        or has_pressure_text(checkout_text(item))
-        or bool(burnout_dimensions(item))
-        or item.checkout_crisis_flag
-    )
 
 
 def crisis_count(items: list[ActivityFeature]) -> int:
