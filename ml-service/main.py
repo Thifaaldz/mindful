@@ -359,7 +359,8 @@ def score_burnout(payload: BurnoutScoreRequest) -> dict[str, Any]:
     factors = dominant_factors(payload.activities, workload_raw, wellbeing, payload.self_report_levels)
     if crisis_count(payload.activities) > 0 and final_score is not None:
         final_score = max(final_score, 75.0)
-    final_score = apply_risk_floor(final_score, factors)
+    risk_floor = dynamic_risk_floor(factors, wellbeing)
+    final_score = apply_risk_floor(final_score, factors, wellbeing)
     category = category_for(final_score)
     recommendation = recommendation_for(
         category,
@@ -392,6 +393,7 @@ def score_burnout(payload: BurnoutScoreRequest) -> dict[str, Any]:
             "checkin_negative_ratio": round(checkin_negative_ratio(payload.activities), 2),
             "checkout_negative_ratio": round(checkout_negative_ratio(payload.activities), 2),
             "worsening_checkout": round(worsening_ratio(payload.activities), 2),
+            "dynamic_risk_floor": risk_floor,
         },
         "model_version": MODEL_VERSION,
         "scoring_version": payload.scoring_version or SCORING_VERSION,
@@ -661,18 +663,29 @@ def category_for(score: float | None) -> str | None:
     return "hijau"
 
 
-def apply_risk_floor(score: float | None, factors: list[str]) -> float | None:
+def apply_risk_floor(score: float | None, factors: list[str], wellbeing: float) -> float | None:
     if score is None or score >= 70:
         return score
-    yellow_signals = {
-        "checkout_negative_mood",
-        "journal_pressure_terms",
-        "teacher_self_report_high",
-        "high_wellbeing_pressure",
-    }
-    if yellow_signals.intersection(factors):
-        return max(score, 40.0)
+    floor = dynamic_risk_floor(factors, wellbeing)
+    if floor > 0:
+        return max(score, floor)
     return score
+
+
+def dynamic_risk_floor(factors: list[str], wellbeing: float) -> float:
+    factor_weights = {
+        "checkout_negative_mood": 5.0,
+        "journal_pressure_terms": 5.0,
+        "teacher_self_report_high": 10.0,
+        "high_wellbeing_pressure": 12.0,
+    }
+    matched = [weight for factor, weight in factor_weights.items() if factor in factors]
+    if not matched:
+        return 0.0
+
+    floor = 40.0 + sum(matched)
+    floor += min(10.0, max(0.0, wellbeing - 40.0) * 0.25)
+    return min(69.0, round(floor, 2))
 
 
 def dominant_factors(

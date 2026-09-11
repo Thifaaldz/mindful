@@ -351,7 +351,7 @@ class BurnoutAnalysisService
             $dominantFactors = array_values(array_unique(['crisis_flag', ...$dominantFactors]));
         }
 
-        [$finalScore, $category] = $this->applyRiskFloor($finalScore, $category, $dominantFactors);
+        [$finalScore, $category] = $this->applyRiskFloor($finalScore, $category, $dominantFactors, $journalScore);
 
         $recommendation = is_array($mlScore['recommendation_summary'] ?? null)
             ? $mlScore['recommendation_summary']
@@ -811,7 +811,7 @@ class BurnoutAnalysisService
         return 'merah';
     }
 
-    private function applyRiskFloor(?float $score, ?string $category, array $dominantFactors): array
+    private function applyRiskFloor(?float $score, ?string $category, array $dominantFactors, float $journalScore): array
     {
         if ($score === null || $category === 'merah') {
             return [$score, $category];
@@ -825,11 +825,32 @@ class BurnoutAnalysisService
         ];
 
         if (array_intersect($yellowSignals, $dominantFactors) !== []) {
-            $score = max($score, 40);
+            $score = max($score, $this->dynamicRiskFloor($dominantFactors, $journalScore));
             $category = $this->category($score);
         }
 
         return [$score, $category];
+    }
+
+    private function dynamicRiskFloor(array $dominantFactors, float $journalScore): float
+    {
+        $factorWeights = [
+            'checkout_negative_mood' => 5,
+            'journal_pressure_terms' => 5,
+            'teacher_self_report_high' => 10,
+            'high_wellbeing_pressure' => 12,
+        ];
+
+        $floor = 40.0;
+        foreach ($factorWeights as $factor => $weight) {
+            if (in_array($factor, $dominantFactors, true)) {
+                $floor += $weight;
+            }
+        }
+
+        $floor += min(10, max(0, $journalScore - 40) * 0.25);
+
+        return min(69, round($floor, 2));
     }
 
     private function dominantFactors(float $workloadScoreRaw, float $journalScore, Collection $completed, array $selfReportLevels = []): array
