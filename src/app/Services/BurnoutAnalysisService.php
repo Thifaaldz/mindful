@@ -211,7 +211,42 @@ class BurnoutAnalysisService
     public function preview(User $user, string $periodType = 'daily', Carbon|string|null $date = null): array
     {
         [$periodStart, $periodEnd] = $this->periodRange($periodType, $date);
-        $analysis = $this->analysisData($user, $periodType, $periodStart, $periodEnd, false);
+        $activities = $this->activitiesForPeriod($user, $periodStart, $periodEnd);
+        $selfReportLevels = $this->selfReportLevels($user, $periodStart, $periodEnd);
+        $signature = $this->analysisSignature($user, $periodType, $periodStart, $periodEnd, $activities, $selfReportLevels);
+        $cached = $this->cachedAnalysisSnapshot($user, $periodType, $periodStart, $periodEnd, $signature);
+
+        if ($cached) {
+            $analysis = [
+                ...$cached->only([
+                    'data_sufficiency',
+                    'activity_count',
+                    'completed_activity_count',
+                    'weighted_planned_hours',
+                    'weighted_actual_hours',
+                    'workload_score_raw',
+                    'workload_variance_pct',
+                    'journal_score',
+                    'final_burnout_risk_score',
+                    'category',
+                    'dominant_factors',
+                    'recommendation_codes',
+                    'recommendation_summary',
+                    'model_version',
+                    'scoring_version',
+                    'threshold_version',
+                ]),
+                'payload' => [
+                    ...($cached->payload ?? []),
+                    'cache_hit' => true,
+                    'cache_key' => $this->analysisCacheKey($user, $periodType, $periodStart, $periodEnd, $signature),
+                ],
+            ];
+
+            return $this->presentPreview($analysis, $periodType, $periodStart, $periodEnd);
+        }
+
+        $analysis = $this->analysisDataFromActivities($user, $periodType, $periodStart, $periodEnd, $activities, false);
 
         return $this->presentPreview($analysis, $periodType, $periodStart, $periodEnd);
     }
