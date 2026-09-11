@@ -417,37 +417,10 @@ class _ActivityAnalysisCard extends StatelessWidget {
     final feeling = '${review['feeling'] ?? ''}'.trim();
     final pattern = '${review['pattern'] ?? ''}'.trim();
     final plan = '${review['plan'] ?? ''}'.trim();
-    final suggestion = '${review['suggestion'] ?? ''}'.trim();
+    final suggestion = _withoutActivityTechniqueLine(
+      '${review['suggestion'] ?? ''}',
+    );
     final dimensions = _listOfStrings(review['burnout_dimensions']);
-    final tactic = _jsonMap(review['recommended_tactic']);
-    final tacticTitle = '${tactic['title'] ?? ''}'.trim();
-    final tacticText = '${tactic['description'] ?? tactic['practice'] ?? ''}'
-        .trim();
-    final tacticReason = '${tactic['why_this_tactic'] ?? ''}'.trim();
-    final movement = '${tactic['recommended_movement'] ?? ''}'.trim();
-
-    void openTechnique() {
-      if (tactic.isEmpty) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => KabatZinnPracticeScreen(
-            snapshot: {
-              'source': 'activity_analysis',
-              'category': condition,
-              'recommendation_summary': {
-                'practice_code': tactic['code'],
-                'practice_title': tactic['title'],
-                'practice': tacticText,
-                'recommended_movement': tactic['recommended_movement'],
-                'why_this_tactic': tactic['why_this_tactic'],
-                'tactic': tactic,
-              },
-              'tactic': tactic,
-            },
-          ),
-        ),
-      );
-    }
 
     return SoftCard(
       child: Column(
@@ -535,17 +508,6 @@ class _ActivityAnalysisCard extends StatelessWidget {
                     ),
                   )
                   .toList(),
-            ),
-          ],
-          if (tactic.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _TechniqueRecommendation(
-              condition: condition,
-              title: tacticTitle,
-              text: tacticText,
-              reason: tacticReason,
-              movement: movement,
-              onOpen: openTechnique,
             ),
           ],
         ],
@@ -898,27 +860,9 @@ Map<String, dynamic> _latestActivityRecommendation(
   final reviews = _journalReviews(snapshot);
   if (reviews.isEmpty) return recommendation;
 
-  final sortedReviews = [...reviews]
-    ..sort((a, b) => _reviewTimestamp(b).compareTo(_reviewTimestamp(a)));
-  final latestReview = sortedReviews.firstWhere(
-    (review) => _jsonMap(review['recommended_tactic']).isNotEmpty,
-    orElse: () => const <String, dynamic>{},
-  );
-  if (latestReview.isEmpty) return recommendation;
-
-  final tactic = _jsonMap(latestReview['recommended_tactic']);
-  if (tactic.isEmpty) return recommendation;
-
-  final title = '${tactic['title'] ?? recommendation['practice_title'] ?? ''}'
-      .trim();
-  final description =
-      '${tactic['description'] ?? tactic['practice'] ?? recommendation['practice'] ?? ''}'
-          .trim();
   final periodContext = _periodRecommendationContext(
     '${snapshot['period_type'] ?? 'daily'}',
   );
-  final activityTitle = '${latestReview['title'] ?? 'aktivitas terakhir'}'
-      .trim();
   final allActivityReview = _analysisReviewFromAllActivities(
     reviews,
     periodContext,
@@ -927,23 +871,9 @@ Map<String, dynamic> _latestActivityRecommendation(
 
   return {
     ...recommendation,
-    'headline': 'Rekomendasi dari aktivitas terakhir',
-    'action': title.isEmpty
-        ? 'Berdasarkan $activityTitle dalam $periodContext, kami menyarankan teknik mindfulness yang paling sesuai.'
-        : 'Berdasarkan $activityTitle dalam $periodContext, kami menyarankan $title sebagai teknik yang paling sesuai.',
     'analysis_review': summaryReview.isNotEmpty
         ? summaryReview
         : allActivityReview,
-    'practice_code':
-        tactic['code'] ?? tactic['category'] ?? recommendation['practice_code'],
-    'practice_title': title.isEmpty ? recommendation['practice_title'] : title,
-    'practice': description.isEmpty ? recommendation['practice'] : description,
-    'recommended_movement':
-        tactic['recommended_movement'] ??
-        recommendation['recommended_movement'],
-    'why_this_tactic':
-        tactic['why_this_tactic'] ?? recommendation['why_this_tactic'],
-    'tactic': tactic,
   };
 }
 
@@ -991,19 +921,24 @@ String _analysisReviewFromAllActivities(
   return buffer.toString().trim();
 }
 
+String _withoutActivityTechniqueLine(String value) {
+  return value
+      .split('\n')
+      .where((line) {
+        final normalized = line.trim().toLowerCase();
+        return !normalized.startsWith('- latihan:') &&
+            !normalized.startsWith('latihan:');
+      })
+      .join('\n')
+      .trim();
+}
+
 String _periodRecommendationContext(String periodType) {
   return switch (periodType) {
     'weekly' => 'kegiatan Anda minggu ini',
     'monthly' => 'kegiatan Anda bulan ini',
     _ => 'kegiatan Anda hari ini',
   };
-}
-
-int _reviewTimestamp(Map<String, dynamic> review) {
-  final parsed = DateTime.tryParse(
-    '${review['checked_out_at'] ?? review['activity_date'] ?? ''}',
-  );
-  return parsed?.millisecondsSinceEpoch ?? 0;
 }
 
 Map<String, List<Map<String, dynamic>>> _groupReviewsByDate(
@@ -1088,8 +1023,6 @@ String _activityInsight(Map<String, dynamic> review) {
   final title = '${review['title'] ?? 'Aktivitas ini'}';
   final fact = '${review['fact'] ?? ''}'.trim();
   final feeling = '${review['feeling'] ?? ''}'.trim();
-  final tactic = _jsonMap(review['recommended_tactic']);
-  final tacticTitle = '${tactic['title'] ?? ''}'.trim();
 
   final conditionText = switch (condition) {
     'merah' => 'menunjukkan tekanan tinggi dan perlu dipulihkan lebih serius',
@@ -1099,11 +1032,8 @@ String _activityInsight(Map<String, dynamic> review) {
   };
   final factText = fact.isEmpty ? '' : ' Fakta utama: $fact';
   final feelingText = feeling.isEmpty ? '' : ' Perasaan yang muncul: $feeling';
-  final tacticText = tacticTitle.isEmpty
-      ? ''
-      : ' Karena kondisi ini, $tacticTitle berguna sebagai latihan yang paling sesuai untuk aktivitas tersebut.';
 
-  return '$title $conditionText.$factText$feelingText$tacticText';
+  return '$title $conditionText.$factText$feelingText';
 }
 
 String _cleanAnalysisText(String value) {

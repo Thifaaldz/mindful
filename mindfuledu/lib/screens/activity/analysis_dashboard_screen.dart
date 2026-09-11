@@ -630,7 +630,9 @@ class _JournalReviewDialogContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final condition = '${review['condition'] ?? _categoryFromReview(review)}';
     final score = review['score'];
-    final suggestion = '${review['suggestion'] ?? ''}'.trim();
+    final suggestion = _withoutActivityTechniqueLine(
+      '${review['suggestion'] ?? ''}',
+    );
     final fact = '${review['fact'] ?? ''}'.trim();
     final feeling = '${review['feeling'] ?? ''}'.trim();
     final plan = '${review['plan'] ?? ''}'.trim();
@@ -640,38 +642,6 @@ class _JournalReviewDialogContent extends StatelessWidget {
       review['checked_out_at'] ?? review['activity_date'],
     );
     final dimensions = _listOfStrings(review['burnout_dimensions']);
-    final recommendedTactic = _jsonMap(review['recommended_tactic']);
-    final tacticTitle = '${recommendedTactic['title'] ?? ''}'.trim();
-    final tacticDescription =
-        '${recommendedTactic['description'] ?? recommendedTactic['practice'] ?? ''}'
-            .trim();
-    final tacticReason = '${recommendedTactic['why_this_tactic'] ?? ''}'.trim();
-
-    void openTechnique() {
-      if (recommendedTactic.isEmpty) return;
-
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => KabatZinnPracticeScreen(
-            snapshot: {
-              'source': 'journal_review',
-              'category': _categoryFromReview(review),
-              'recommendation_summary': {
-                'practice_code': recommendedTactic['code'],
-                'practice_title': recommendedTactic['title'],
-                'practice': tacticDescription,
-                'recommended_movement':
-                    recommendedTactic['recommended_movement'],
-                'why_this_tactic': recommendedTactic['why_this_tactic'],
-                'tactic': recommendedTactic,
-              },
-              'tactic': recommendedTactic,
-            },
-          ),
-        ),
-      );
-    }
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -708,23 +678,6 @@ class _JournalReviewDialogContent extends StatelessWidget {
         if (suggestion.isNotEmpty) ...[
           const SizedBox(height: 10),
           _JournalSuggestionBubble(text: suggestion),
-        ],
-        if (recommendedTactic.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          _PracticeCallout(title: tacticTitle, text: tacticDescription),
-          if (tacticReason.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _RecommendationDetailLine(
-              icon: Icons.lightbulb_outline,
-              text: tacticReason,
-            ),
-          ],
-          const SizedBox(height: 10),
-          FilledButton.icon(
-            onPressed: openTechnique,
-            icon: const Icon(Icons.self_improvement),
-            label: const Text('Buka Teknik Ini'),
-          ),
         ],
         if (plan.isNotEmpty) ...[
           const SizedBox(height: 8),
@@ -1876,27 +1829,9 @@ Map<String, dynamic> _latestActivityRecommendation(
   final reviews = _journalReviews(snapshot);
   if (reviews.isEmpty) return recommendation;
 
-  final sortedReviews = [...reviews]
-    ..sort((a, b) => _reviewTimestamp(b).compareTo(_reviewTimestamp(a)));
-  final latestReview = sortedReviews.firstWhere(
-    (review) => _jsonMap(review['recommended_tactic']).isNotEmpty,
-    orElse: () => const <String, dynamic>{},
-  );
-  if (latestReview.isEmpty) return recommendation;
-
-  final tactic = _jsonMap(latestReview['recommended_tactic']);
-  if (tactic.isEmpty) return recommendation;
-
-  final title = '${tactic['title'] ?? recommendation['practice_title'] ?? ''}'
-      .trim();
-  final description =
-      '${tactic['description'] ?? tactic['practice'] ?? recommendation['practice'] ?? ''}'
-          .trim();
   final periodContext = _periodRecommendationContext(
     '${snapshot?['period_type'] ?? 'daily'}',
   );
-  final activityTitle = '${latestReview['title'] ?? 'aktivitas terakhir'}'
-      .trim();
   final allActivityReview = _analysisReviewFromAllActivities(
     reviews,
     periodContext,
@@ -1905,23 +1840,9 @@ Map<String, dynamic> _latestActivityRecommendation(
 
   return {
     ...recommendation,
-    'headline': 'Rekomendasi dari aktivitas terakhir',
-    'action': title.isEmpty
-        ? 'Berdasarkan $activityTitle dalam $periodContext, kami menyarankan teknik mindfulness yang paling sesuai.'
-        : 'Berdasarkan $activityTitle dalam $periodContext, kami menyarankan $title sebagai teknik yang paling sesuai.',
     'analysis_review': summaryReview.isNotEmpty
         ? summaryReview
         : allActivityReview,
-    'practice_code':
-        tactic['code'] ?? tactic['category'] ?? recommendation['practice_code'],
-    'practice_title': title.isEmpty ? recommendation['practice_title'] : title,
-    'practice': description.isEmpty ? recommendation['practice'] : description,
-    'recommended_movement':
-        tactic['recommended_movement'] ??
-        recommendation['recommended_movement'],
-    'why_this_tactic':
-        tactic['why_this_tactic'] ?? recommendation['why_this_tactic'],
-    'tactic': tactic,
   };
 }
 
@@ -1969,19 +1890,24 @@ String _analysisReviewFromAllActivities(
   return buffer.toString().trim();
 }
 
+String _withoutActivityTechniqueLine(String value) {
+  return value
+      .split('\n')
+      .where((line) {
+        final normalized = line.trim().toLowerCase();
+        return !normalized.startsWith('- latihan:') &&
+            !normalized.startsWith('latihan:');
+      })
+      .join('\n')
+      .trim();
+}
+
 String _periodRecommendationContext(String periodType) {
   return switch (periodType) {
     'weekly' => 'kegiatan Anda minggu ini',
     'monthly' => 'kegiatan Anda bulan ini',
     _ => 'kegiatan Anda hari ini',
   };
-}
-
-int _reviewTimestamp(Map<String, dynamic> review) {
-  final parsed = DateTime.tryParse(
-    '${review['checked_out_at'] ?? review['activity_date'] ?? ''}',
-  );
-  return parsed?.millisecondsSinceEpoch ?? 0;
 }
 
 List<Map<String, dynamic>> _activityBreakdown(Map<String, dynamic>? snapshot) {

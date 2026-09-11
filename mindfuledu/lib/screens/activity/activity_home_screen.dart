@@ -13,7 +13,6 @@ import '../../core/reminder_service.dart';
 import '../../core/session.dart';
 import '../../widgets/app_chrome.dart';
 import 'burnout_analysis_screen.dart';
-import 'kabat_zinn_practice_screen.dart';
 
 class ActivityHomeScreen extends StatefulWidget {
   const ActivityHomeScreen({super.key});
@@ -949,15 +948,16 @@ class _ActivityCard extends StatelessWidget {
         activity['checkout_at'] == null &&
         status != 'cancelled' &&
         teacherCheckoutReady;
-    final suggestion = '${activity['checkout_suggestion'] ?? ''}'.trim();
-    final recommendedTactic = _jsonMap(activity['recommended_tactic']);
+    final suggestion = _withoutActivityTechniqueLine(
+      '${activity['checkout_suggestion'] ?? ''}',
+    );
     final crisis = activity['checkout_crisis_flag'] == true;
     final burnoutDimensions =
         (activity['checkout_auto_burnout_tags'] as List? ?? [])
             .map((item) => '$item')
             .where((item) => item.isNotEmpty)
             .toList();
-    final hasReview = suggestion.isNotEmpty || recommendedTactic.isNotEmpty;
+    final hasReview = suggestion.isNotEmpty;
 
     void openActivityAnalysis() {
       showDialog<void>(
@@ -968,7 +968,6 @@ class _ActivityCard extends StatelessWidget {
           content: _ActivityAnalysisDialogContent(
             activity: activity,
             suggestion: suggestion,
-            recommendedTactic: recommendedTactic,
           ),
           actions: [
             TextButton.icon(
@@ -976,37 +975,6 @@ class _ActivityCard extends StatelessWidget {
               icon: const Icon(Icons.close),
               label: const Text('Tutup'),
             ),
-            if (recommendedTactic.isNotEmpty)
-              FilledButton.icon(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop();
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => KabatZinnPracticeScreen(
-                        snapshot: {
-                          'source': 'activity_review',
-                          'category': _categoryFromActivity(activity),
-                          'recommendation_summary': {
-                            'practice_code': recommendedTactic['code'],
-                            'practice_title': recommendedTactic['title'],
-                            'practice':
-                                recommendedTactic['description'] ??
-                                recommendedTactic['practice'],
-                            'recommended_movement':
-                                recommendedTactic['recommended_movement'],
-                            'why_this_tactic':
-                                recommendedTactic['why_this_tactic'],
-                            'tactic': recommendedTactic,
-                          },
-                          'tactic': recommendedTactic,
-                        },
-                      ),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.self_improvement),
-                label: const Text('Buka Teknik'),
-              ),
           ],
         ),
       );
@@ -1169,23 +1137,13 @@ class _ActivityAnalysisDialogContent extends StatelessWidget {
   const _ActivityAnalysisDialogContent({
     required this.activity,
     required this.suggestion,
-    required this.recommendedTactic,
   });
 
   final Map<String, dynamic> activity;
   final String suggestion;
-  final Map<String, dynamic> recommendedTactic;
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.secondary;
-    final tacticTitle = '${recommendedTactic['title'] ?? ''}'.trim();
-    final tacticDescription =
-        '${recommendedTactic['description'] ?? recommendedTactic['practice'] ?? ''}'
-            .trim();
-    final tacticReason = '${recommendedTactic['why_this_tactic'] ?? ''}'.trim();
-    final movement = '${recommendedTactic['recommended_movement'] ?? ''}'
-        .trim();
     final source = '${activity['checkout_analysis_source'] ?? ''}'.trim();
 
     return Column(
@@ -1209,73 +1167,6 @@ class _ActivityAnalysisDialogContent extends StatelessWidget {
           const SizedBox(height: 12),
           _ActivityNarrativePointList(text: suggestion),
         ],
-        if (recommendedTactic.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: primary.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppTheme.line),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.self_improvement, color: primary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (tacticTitle.isNotEmpty)
-                        Text(
-                          tacticTitle,
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                      if (tacticDescription.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(tacticDescription),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (tacticReason.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            _ActivityDialogLine(
-              icon: Icons.lightbulb_outline,
-              text: tacticReason,
-            ),
-          ],
-          if (movement.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _ActivityDialogLine(icon: Icons.accessibility_new, text: movement),
-          ],
-        ],
-      ],
-    );
-  }
-}
-
-class _ActivityDialogLine extends StatelessWidget {
-  const _ActivityDialogLine({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.secondary;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 18, color: primary),
-        const SizedBox(width: 8),
-        Expanded(child: Text(text)),
       ],
     );
   }
@@ -1396,24 +1287,24 @@ String _burnoutDimensionLabel(String dimension) {
   return _burnoutDimensionLabels[dimension] ?? dimension;
 }
 
-String _categoryFromActivity(Map<String, dynamic> activity) {
-  if (activity['checkout_crisis_flag'] == true) return 'merah';
-
-  final mood =
-      '${activity['checkout_mood_detected'] ?? activity['checkout_mood'] ?? ''}';
-  if (const {'cemas', 'sedih', 'marah', 'lelah'}.contains(mood)) {
-    return 'kuning';
-  }
-
-  return 'hijau';
-}
-
 bool _isActivityAiSource(String source) {
   return const {'gemini', 'fastapi', 'mock'}.contains(source);
 }
 
 String _activitySourceLabel(String source) {
   return _isActivityAiSource(source) ? 'Analisa' : 'Analisa lokal';
+}
+
+String _withoutActivityTechniqueLine(String value) {
+  return value
+      .split('\n')
+      .where((line) {
+        final normalized = line.trim().toLowerCase();
+        return !normalized.startsWith('- latihan:') &&
+            !normalized.startsWith('latihan:');
+      })
+      .join('\n')
+      .trim();
 }
 
 String _conditionLabel(String category) {
@@ -1641,24 +1532,13 @@ class _ClassroomObservationSheet extends StatelessWidget {
                       final checkout = _jsonMap(row['checkout']);
                       final analysis = _jsonMap(row['burnout_analysis']);
                       final activity = _jsonMap(row['activity']);
-                      final recommendation = _jsonMap(
-                        checkout['recommended_tactic'] ??
-                            analysis['recommendation'] ??
-                            analysis['recommendation_summary'],
-                      );
                       final category =
                           '${row['activity_condition'] ?? analysis['category'] ?? 'belum'}';
                       final source = '${checkout['analysis_source'] ?? ''}'
                           .trim();
-                      final tacticTitle =
-                          '${recommendation['title'] ?? recommendation['practice'] ?? ''}'
-                              .trim();
-                      final tacticReason =
-                          '${recommendation['why_this_tactic'] ?? recommendation['reason'] ?? ''}'
-                              .trim();
-                      final tacticMovement =
-                          '${recommendation['recommended_movement'] ?? ''}'
-                              .trim();
+                      final checkoutSuggestion = _withoutActivityTechniqueLine(
+                        '${checkout['suggestion'] ?? ''}',
+                      );
 
                       return Card(
                         child: Padding(
@@ -1735,23 +1615,8 @@ class _ClassroomObservationSheet extends StatelessWidget {
                               ),
                               _ObservationDetailLine(
                                 label: 'Analisa dan saran',
-                                value: '${checkout['suggestion'] ?? ''}',
+                                value: checkoutSuggestion,
                               ),
-                              if (tacticTitle.isNotEmpty) ...[
-                                const SizedBox(height: 10),
-                                Text(
-                                  tacticTitle,
-                                  style: Theme.of(context).textTheme.titleSmall,
-                                ),
-                                _ObservationDetailLine(
-                                  label: 'Alasan teknik',
-                                  value: tacticReason,
-                                ),
-                                _ObservationDetailLine(
-                                  label: 'Gerakan disarankan',
-                                  value: tacticMovement,
-                                ),
-                              ],
                             ],
                           ),
                         ),
