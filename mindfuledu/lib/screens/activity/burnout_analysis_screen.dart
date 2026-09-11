@@ -170,6 +170,18 @@ class _AnalysisResult extends StatelessWidget {
     final reviews = _journalReviews(snapshot);
     final score = snapshot['final_burnout_risk_score'];
     final periodType = '${snapshot['period_type'] ?? 'daily'}';
+    final tactic = _jsonMap(recommendation['tactic']);
+    final tacticTitle =
+        '${recommendation['practice_title'] ?? tactic['title'] ?? ''}'.trim();
+    final tacticText =
+        '${recommendation['practice'] ?? tactic['description'] ?? tactic['practice'] ?? ''}'
+            .trim();
+    final tacticReason =
+        '${recommendation['why_this_tactic'] ?? tactic['why_this_tactic'] ?? ''}'
+            .trim();
+    final movement =
+        '${recommendation['recommended_movement'] ?? tactic['recommended_movement'] ?? ''}'
+            .trim();
     final activityCount = _numValue(snapshot['activity_count']).round();
     final completedCount = _numValue(
       snapshot['completed_activity_count'],
@@ -178,6 +190,35 @@ class _AnalysisResult extends StatelessWidget {
       _jsonMap(snapshot['payload'])['journal_count'],
       fallback: reviews.length.toDouble(),
     ).round();
+
+    void openTechnique() {
+      final practiceCode =
+          '${recommendation['practice_code'] ?? tactic['code'] ?? tactic['category'] ?? ''}'
+              .trim();
+      if (practiceCode.isEmpty && tactic.isEmpty) return;
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => KabatZinnPracticeScreen(
+            snapshot: {
+              'source': 'analysis_result',
+              'category': category,
+              'practice_code': practiceCode,
+              'recommendation_summary': {
+                ...recommendation,
+                'practice_code': practiceCode,
+                'practice_title': tacticTitle,
+                'practice': tacticText,
+                'recommended_movement': movement,
+                'why_this_tactic': tacticReason,
+                'tactic': tactic,
+              },
+              'tactic': tactic,
+            },
+          ),
+        ),
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -234,6 +275,17 @@ class _AnalysisResult extends StatelessWidget {
               if (review.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 _InsightLine(icon: Icons.psychology_outlined, text: review),
+              ],
+              if (tacticTitle.isNotEmpty || tacticText.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _TechniqueRecommendation(
+                  condition: category,
+                  title: tacticTitle,
+                  text: tacticText,
+                  reason: tacticReason,
+                  movement: movement,
+                  onOpen: openTechnique,
+                ),
               ],
               if (reductionSteps.isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -733,6 +785,13 @@ Map<String, dynamic> _latestActivityRecommendation(
   final latestReview = sortedReviews.first;
   final tactic = _jsonMap(latestReview['recommended_tactic']);
   if (tactic.isEmpty) return recommendation;
+  final currentTactic = _jsonMap(recommendation['tactic']);
+  final hasPeriodPractice =
+      currentTactic.isNotEmpty ||
+      '${recommendation['practice_code'] ?? ''}'.trim().isNotEmpty;
+  if (hasPeriodPractice) {
+    return recommendation;
+  }
 
   final title = '${tactic['title'] ?? recommendation['practice_title'] ?? ''}'
       .trim();
@@ -750,6 +809,7 @@ Map<String, dynamic> _latestActivityRecommendation(
         ? 'Berdasarkan $periodContext, kami menyarankan teknik mindfulness yang paling sesuai.'
         : 'Berdasarkan $periodContext, kami menyarankan $title sebagai teknik yang paling sesuai.',
     'analysis_review':
+        recommendation['analysis_review'] ??
         'Kesimpulan ini dirangkum dari activity, mood, dan jurnal pada $periodContext.',
     'practice_code':
         tactic['code'] ?? tactic['category'] ?? recommendation['practice_code'],

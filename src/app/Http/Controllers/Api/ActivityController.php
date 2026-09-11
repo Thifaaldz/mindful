@@ -560,12 +560,18 @@ class ActivityController extends Controller
 
     private function activityPayload(Activity $activity): array
     {
+        $hasReview = filled($activity->checkout_fact) || filled($activity->checkout_feeling);
+        $recommendedTactic = $hasReview
+            ? $this->burnoutAnalysisService->recommendedTacticForJournalActivity($activity)
+            : null;
+
         return [
             ...$activity->toArray(),
+            'checkout_suggestion' => $hasReview
+                ? $this->burnoutAnalysisService->activitySuggestion($activity, $recommendedTactic)
+                : $activity->checkout_suggestion,
             'classroom_gate' => $this->classroomGatePayload($activity),
-            'recommended_tactic' => filled($activity->checkout_fact) || filled($activity->checkout_feeling)
-                ? $this->burnoutAnalysisService->recommendedTacticForJournalActivity($activity)
-                : null,
+            'recommended_tactic' => $recommendedTactic,
         ];
     }
 

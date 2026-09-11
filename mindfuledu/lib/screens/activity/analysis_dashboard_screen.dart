@@ -327,6 +327,7 @@ class _TodayScaleCard extends StatelessWidget {
     final action = '${recommendation['action'] ?? ''}';
     final practice = '${recommendation['practice'] ?? ''}';
     final practiceTitle = '${recommendation['practice_title'] ?? ''}'.trim();
+    final canOpenPractice = _hasPracticeRecommendation(recommendation);
     final activityCount = _numValue(today['activity_count']).round();
     final journalCount = _numValue(
       today['journal_count'],
@@ -380,7 +381,18 @@ class _TodayScaleCard extends StatelessWidget {
             if (action.isNotEmpty) ...[const SizedBox(height: 8), Text(action)],
             if (practice.isNotEmpty) ...[
               const SizedBox(height: 12),
-              _PracticeCallout(title: practiceTitle, text: practice),
+              _PracticeCallout(
+                title: practiceTitle,
+                text: practice,
+                onOpen: canOpenPractice
+                    ? () => _openRecommendationPractice(
+                        context,
+                        today,
+                        recommendation,
+                        source: 'today_recommendation',
+                      )
+                    : null,
+              ),
             ],
           ],
         ],
@@ -1019,6 +1031,8 @@ class _RecommendationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final recommendation = _latestActivityRecommendation(snapshot);
+    final practice = '${recommendation['practice'] ?? ''}'.trim();
+    final practiceTitle = '${recommendation['practice_title'] ?? ''}'.trim();
     final factors = (recommendation['dominant_factors'] as List? ?? [])
         .map((item) => _factorLabel('$item'))
         .toList();
@@ -1065,6 +1079,20 @@ class _RecommendationCard extends StatelessWidget {
                   text: step,
                 ),
               ),
+            ),
+          ],
+          if (practice.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _PracticeCallout(
+              title: practiceTitle,
+              text: practice,
+              onOpen: _hasPracticeRecommendation(recommendation)
+                  ? () => _openRecommendationPractice(
+                      context,
+                      snapshot,
+                      recommendation,
+                    )
+                  : null,
             ),
           ],
           if (factors.isNotEmpty) ...[
@@ -1274,17 +1302,18 @@ class _AnalysisHistoryDetailScreen extends StatelessWidget {
 }
 
 class _PracticeCallout extends StatelessWidget {
-  const _PracticeCallout({required this.text, this.title = ''});
+  const _PracticeCallout({required this.text, this.title = '', this.onOpen});
 
   final String title;
   final String text;
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
     if (text.isEmpty) return const SizedBox.shrink();
     final primary = Theme.of(context).colorScheme.secondary;
 
-    return Container(
+    final content = Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1306,11 +1335,27 @@ class _PracticeCallout extends StatelessWidget {
                   const SizedBox(height: 4),
                 ],
                 Text(text),
+                if (onOpen != null) ...[
+                  const SizedBox(height: 10),
+                  FilledButton.icon(
+                    onPressed: onOpen,
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Buka Teknik Ini'),
+                  ),
+                ],
               ],
             ),
           ),
         ],
       ),
+    );
+
+    if (onOpen == null) return content;
+
+    return InkWell(
+      onTap: onOpen,
+      borderRadius: BorderRadius.circular(12),
+      child: content,
     );
   }
 }
@@ -1335,6 +1380,56 @@ class _RecommendationDetailLine extends StatelessWidget {
       ],
     );
   }
+}
+
+bool _hasPracticeRecommendation(Map<String, dynamic> recommendation) {
+  final tactic = _jsonMap(recommendation['tactic']);
+  return tactic.isNotEmpty ||
+      '${recommendation['practice_code'] ?? ''}'.trim().isNotEmpty ||
+      '${recommendation['practice_title'] ?? ''}'.trim().isNotEmpty;
+}
+
+void _openRecommendationPractice(
+  BuildContext context,
+  Map<String, dynamic> snapshot,
+  Map<String, dynamic> recommendation, {
+  String source = 'analysis_recommendation',
+}) {
+  final tactic = _jsonMap(recommendation['tactic']);
+  final practiceCode =
+      '${recommendation['practice_code'] ?? tactic['code'] ?? tactic['category'] ?? ''}'
+          .trim();
+
+  if (practiceCode.isEmpty && tactic.isEmpty) return;
+
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => KabatZinnPracticeScreen(
+        snapshot: {
+          'source': source,
+          'category': snapshot['category'] ?? recommendation['category'],
+          'practice_code': practiceCode,
+          'recommendation_summary': {
+            ...recommendation,
+            'practice_code': practiceCode,
+            'practice_title':
+                recommendation['practice_title'] ?? tactic['title'],
+            'practice':
+                recommendation['practice'] ??
+                tactic['description'] ??
+                tactic['practice'],
+            'recommended_movement':
+                recommendation['recommended_movement'] ??
+                tactic['recommended_movement'],
+            'why_this_tactic':
+                recommendation['why_this_tactic'] ?? tactic['why_this_tactic'],
+            'tactic': tactic,
+          },
+          'tactic': tactic,
+        },
+      ),
+    ),
+  );
 }
 
 class _RiskChartPainter extends CustomPainter {
@@ -1651,6 +1746,13 @@ Map<String, dynamic> _latestActivityRecommendation(
   final latestReview = sortedReviews.first;
   final tactic = _jsonMap(latestReview['recommended_tactic']);
   if (tactic.isEmpty) return recommendation;
+  final currentTactic = _jsonMap(recommendation['tactic']);
+  final hasPeriodPractice =
+      currentTactic.isNotEmpty ||
+      '${recommendation['practice_code'] ?? ''}'.trim().isNotEmpty;
+  if (hasPeriodPractice) {
+    return recommendation;
+  }
 
   final title = '${tactic['title'] ?? recommendation['practice_title'] ?? ''}'
       .trim();
@@ -1668,6 +1770,7 @@ Map<String, dynamic> _latestActivityRecommendation(
         ? 'Berdasarkan $periodContext, kami menyarankan teknik mindfulness yang paling sesuai.'
         : 'Berdasarkan $periodContext, kami menyarankan $title sebagai teknik yang paling sesuai.',
     'analysis_review':
+        recommendation['analysis_review'] ??
         'Kesimpulan ini dirangkum dari activity, mood, dan jurnal pada $periodContext.',
     'practice_code':
         tactic['code'] ?? tactic['category'] ?? recommendation['practice_code'],

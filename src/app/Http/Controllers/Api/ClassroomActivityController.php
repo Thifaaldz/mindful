@@ -159,7 +159,9 @@ class ClassroomActivityController extends Controller
                         'feeling' => $studentActivity->checkout_feeling,
                         'pattern' => $studentActivity->checkout_pattern,
                         'plan' => $studentActivity->checkout_plan,
-                        'suggestion' => $studentActivity->checkout_suggestion,
+                        'suggestion' => $recommendedTactic
+                            ? $this->burnoutAnalysisService->activitySuggestion($studentActivity, $recommendedTactic)
+                            : $studentActivity->checkout_suggestion,
                         'analysis_source' => $studentActivity->checkout_analysis_source,
                         'crisis_flag' => (bool) $studentActivity->checkout_crisis_flag,
                         'burnout_dimensions' => $studentActivity->checkout_auto_burnout_tags ?? [],

@@ -16,6 +16,7 @@ class BurnoutAnalysisService
     private const SCORING_VERSION = 'scoring-v2.5-edumindful';
     private const MODEL_VERSION = 'php-fallback-edumindful-v2.5';
     private const THRESHOLD_VERSION = 'threshold-v2.5';
+    private const NARRATIVE_VERSION = 'narrative-v1.1';
     private const CHECKIN_NEGATIVE_MOODS = ['cemas', 'sedih', 'marah'];
     private const CHECKOUT_NEGATIVE_MOODS = ['cemas', 'sedih', 'marah', 'lelah'];
     private const JOURNAL_PRESSURE_KEYWORDS = [
@@ -357,6 +358,18 @@ class BurnoutAnalysisService
             : $this->recommendation($category, $dominantFactors, $user, $tacticCatalog);
         $recommendation = $this->alignRecommendationWithJournalReview($recommendation, $journalRows, $tacticCatalog);
         $recommendation = $this->enrichRecommendationWithTactic($recommendation, $category, $dominantFactors, $user, $tacticCatalog);
+        $recommendation = $this->enrichRecommendationNarrative(
+            $recommendation,
+            $category,
+            $dominantFactors,
+            $completed,
+            $periodType,
+            $user,
+            $workloadScoreRaw,
+            $journalScore,
+            $weightedActualHours,
+            $periodCapacity
+        );
         $recommendationCodes = array_values(array_unique($recommendation['codes'] ?? []));
         if ($recommendationCodes === [] && is_array($mlScore['recommendation_codes'] ?? null)) {
             $recommendationCodes = $mlScore['recommendation_codes'];
@@ -553,6 +566,7 @@ class BurnoutAnalysisService
     {
         $payload = [
             'scoring_version' => self::SCORING_VERSION,
+            'narrative_version' => self::NARRATIVE_VERSION,
             'period_type' => $periodType,
             'period_start' => $periodStart->toDateString(),
             'period_end' => $periodEnd->toDateString(),
@@ -893,7 +907,7 @@ class BurnoutAnalysisService
                     'feeling' => $activity->checkout_feeling,
                     'pattern' => $activity->checkout_pattern,
                     'plan' => $activity->checkout_plan,
-                    'suggestion' => $activity->checkout_suggestion,
+                    'suggestion' => $this->activitySuggestion($activity, $recommendedTactic),
                     'crisis_flag' => (bool) $activity->checkout_crisis_flag,
                     'burnout_dimensions' => $this->burnoutDimensions($activity),
                     'analysis_source' => $activity->checkout_analysis_source,
@@ -939,6 +953,58 @@ class BurnoutAnalysisService
             'why_this_tactic' => $raw['why_this_tactic'] ?? $this->whyTactic(null, ['checkout_negative_mood'], $tactic),
             'source' => $source,
         ];
+    }
+
+    public function activitySuggestion(Activity $activity, ?array $recommendedTactic = null): string
+    {
+        $recommendedTactic ??= $this->recommendedTacticForJournalActivity($activity);
+        $score = $this->activityRiskScore($activity);
+        $condition = $this->category($score);
+        $title = trim((string) ($activity->title ?: 'Aktivitas ini'));
+        $checkinMood = trim((string) ($activity->checkin_mood ?: '-'));
+        $checkoutMood = trim((string) (($activity->checkout_mood_detected ?: $activity->checkout_mood) ?: '-'));
+        $fact = $this->shortText($activity->checkout_fact, 120);
+        $feeling = $this->shortText($activity->checkout_feeling, 120);
+        $pattern = $this->shortText($activity->checkout_pattern, 100);
+        $plan = $this->shortText($activity->checkout_plan, 100);
+        $tacticTitle = trim((string) ($recommendedTactic['title'] ?? 'latihan mindfulness'));
+        $movement = $this->shortText($recommendedTactic['recommended_movement'] ?? null, 140);
+
+        $conditionText = match ($condition) {
+            'merah' => 'menunjukkan tekanan tinggi',
+            'kuning' => 'menunjukkan tanda tekanan yang perlu diberi jeda',
+            default => 'masih relatif stabil',
+        };
+
+        $parts = [
+            "{$title} {$conditionText} karena mood bergerak dari {$checkinMood} ke {$checkoutMood}.",
+        ];
+
+        if ($fact !== '') {
+            $parts[] = "Kejadian utama yang tercatat: {$fact}.";
+        }
+
+        if ($feeling !== '') {
+            $parts[] = "Perasaan yang muncul: {$feeling}.";
+        }
+
+        if ($pattern !== '') {
+            $parts[] = "Pola yang terlihat: {$pattern}.";
+        }
+
+        if ($plan !== '') {
+            $parts[] = "Rencana berikutnya: {$plan}.";
+        }
+
+        if ($tacticTitle !== '') {
+            $parts[] = "{$tacticTitle} disarankan untuk membantu merespons kondisi setelah aktivitas ini.";
+        }
+
+        if ($movement !== '') {
+            $parts[] = $movement;
+        }
+
+        return implode(' ', $parts);
     }
 
     private function decodedCheckoutAnalysis(Activity $activity): array
@@ -1292,6 +1358,141 @@ class BurnoutAnalysisService
         }
 
         return 'Aktivitas dan jurnal masih relatif terkendali, dengan ruang untuk menjaga jeda pemulihan.';
+    }
+
+    private function enrichRecommendationNarrative(
+        array $recommendation,
+        ?string $category,
+        array $dominantFactors,
+        Collection $completed,
+        string $periodType,
+        User $user,
+        float $workloadScoreRaw,
+        float $journalScore,
+        float $weightedActualHours,
+        float $periodCapacity
+    ): array {
+        $role = $user->isStudent() ? 'student' : ($user->isTeacher() ? 'teacher' : 'other');
+        $periodContext = $this->periodContextLabel($periodType);
+        $tacticTitle = trim((string) ($recommendation['practice_title'] ?? data_get($recommendation, 'tactic.title', 'latihan mindfulness')));
+        $conditionText = $category === null
+            ? 'data belum cukup untuk menyimpulkan risiko'
+            : $this->conditionPhrase($category);
+        $activityCount = $completed->count();
+        $journalRows = $completed->filter(fn (Activity $activity) => $this->hasReviewableJournal($activity));
+        $negativeTransitions = $completed
+            ->filter(fn (Activity $activity) => $this->checkoutNegative($activity) || $this->checkinNegative($activity))
+            ->count();
+        $stableTransitions = $completed
+            ->filter(fn (Activity $activity) => ! $this->checkoutNegative($activity) && ! $this->checkinNegative($activity))
+            ->count();
+        $relevantActivities = $this->mostRelevantActivities($completed);
+        $factorText = $this->dominantFactorPhrases($dominantFactors);
+        $capacityText = $periodCapacity > 0
+            ? round($weightedActualHours, 2).' dari '.round($periodCapacity, 2).' jam kapasitas berbobot'
+            : round($weightedActualHours, 2).' jam berbobot';
+
+        $reviewParts = [
+            "Kesimpulan {$periodContext}: kondisi Anda {$conditionText}.",
+            "Sistem membaca {$activityCount} aktivitas selesai dengan {$journalRows->count()} jurnal, beban {$capacityText}, skor beban ".round($workloadScoreRaw, 2).", dan skor mood/jurnal ".round($journalScore, 2).'.',
+        ];
+
+        if ($negativeTransitions > 0) {
+            $reviewParts[] = "{$negativeTransitions} aktivitas memiliki mood negatif pada check-in atau check-out, sehingga perlu ada jeda pemulihan yang lebih sadar.";
+        } elseif ($stableTransitions > 0) {
+            $reviewParts[] = "Mayoritas mood pada aktivitas yang tercatat masih stabil, jadi rekomendasi diarahkan untuk mempertahankan ritme baik.";
+        }
+
+        if ($factorText !== '') {
+            $reviewParts[] = "Faktor yang paling terlihat: {$factorText}.";
+        }
+
+        if ($relevantActivities !== '') {
+            $reviewParts[] = "Aktivitas yang paling memengaruhi pembacaan periode ini: {$relevantActivities}.";
+        }
+
+        if ($tacticTitle !== '') {
+            $reviewParts[] = "{$tacticTitle} dipilih agar latihan yang dibuka selaras dengan pola aktivitas dan mood pada periode ini.";
+        }
+
+        $recommendation['analysis_review'] = implode(' ', $reviewParts);
+
+        if ($tacticTitle !== '') {
+            $recommendation['action'] = "Berdasarkan {$periodContext}, buka {$tacticTitle} sebagai gerakan/latihan utama. Gunakan setelah aktivitas yang paling menguras atau sebelum berpindah ke aktivitas berikutnya.";
+        }
+
+        $recommendation['risk_reduction_steps'] = $this->riskReductionSteps($category, $dominantFactors, $role);
+
+        return $recommendation;
+    }
+
+    private function periodContextLabel(string $periodType): string
+    {
+        return match ($periodType) {
+            'weekly' => 'minggu ini',
+            'monthly' => 'bulan ini',
+            default => 'hari ini',
+        };
+    }
+
+    private function conditionPhrase(string $category): string
+    {
+        return match ($category) {
+            'merah' => 'berada di area merah, artinya tekanan aktivitas dan/atau mood perlu segera dipulihkan',
+            'kuning' => 'berada di area kuning, artinya mulai ada tanda tekanan dari aktivitas atau jurnal',
+            default => 'berada di area hijau, artinya beban dan mood masih relatif terkendali',
+        };
+    }
+
+    private function dominantFactorPhrases(array $dominantFactors): string
+    {
+        $labels = [
+            'workload_over_capacity' => 'beban melewati kapasitas',
+            'dense_workload' => 'jadwal cukup padat',
+            'high_wellbeing_pressure' => 'tekanan dari mood/jurnal tinggi',
+            'crisis_flag' => 'ada sinyal krisis pada jurnal',
+            'checkout_negative_mood' => 'mood setelah aktivitas sering negatif',
+            'journal_pressure_terms' => 'jurnal memuat kata/tema tekanan',
+            'consecutive_high_intensity' => 'beberapa aktivitas berintensitas tinggi',
+            'late_activity' => 'ada aktivitas sampai sore/malam',
+            'balanced_period' => 'periode relatif seimbang',
+        ];
+
+        return collect($dominantFactors)
+            ->map(fn ($factor) => $labels[$factor] ?? (string) $factor)
+            ->filter(fn ($label) => trim($label) !== '')
+            ->take(4)
+            ->implode(', ');
+    }
+
+    private function mostRelevantActivities(Collection $completed): string
+    {
+        return $completed
+            ->sortByDesc(fn (Activity $activity) => $this->activityRiskScore($activity))
+            ->take(3)
+            ->map(function (Activity $activity) {
+                $score = round($this->activityRiskScore($activity), 2);
+                $mood = ($activity->checkin_mood ?: '-').' ke '.(($activity->checkout_mood_detected ?: $activity->checkout_mood) ?: '-');
+
+                return "{$activity->title} ({$mood}, skor aktivitas {$score})";
+            })
+            ->implode('; ');
+    }
+
+    private function shortText(?string $text, int $limit): string
+    {
+        $value = trim((string) $text);
+        if ($value === '') {
+            return '';
+        }
+
+        $value = preg_replace('/\s+/u', ' ', $value) ?: $value;
+
+        if (mb_strlen($value) <= $limit) {
+            return $value;
+        }
+
+        return rtrim(mb_substr($value, 0, $limit - 3)).'...';
     }
 
     private function riskReductionSteps(?string $category, array $dominantFactors, string $role): array
