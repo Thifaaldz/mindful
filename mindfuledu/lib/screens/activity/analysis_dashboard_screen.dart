@@ -1878,16 +1878,14 @@ Map<String, dynamic> _latestActivityRecommendation(
 
   final sortedReviews = [...reviews]
     ..sort((a, b) => _reviewTimestamp(b).compareTo(_reviewTimestamp(a)));
-  final latestReview = sortedReviews.first;
+  final latestReview = sortedReviews.firstWhere(
+    (review) => _jsonMap(review['recommended_tactic']).isNotEmpty,
+    orElse: () => const <String, dynamic>{},
+  );
+  if (latestReview.isEmpty) return recommendation;
+
   final tactic = _jsonMap(latestReview['recommended_tactic']);
   if (tactic.isEmpty) return recommendation;
-  final currentTactic = _jsonMap(recommendation['tactic']);
-  final hasPeriodPractice =
-      currentTactic.isNotEmpty ||
-      '${recommendation['practice_code'] ?? ''}'.trim().isNotEmpty;
-  if (hasPeriodPractice) {
-    return recommendation;
-  }
 
   final title = '${tactic['title'] ?? recommendation['practice_title'] ?? ''}'
       .trim();
@@ -1897,13 +1895,15 @@ Map<String, dynamic> _latestActivityRecommendation(
   final periodContext = _periodRecommendationContext(
     '${snapshot?['period_type'] ?? 'daily'}',
   );
+  final activityTitle = '${latestReview['title'] ?? 'aktivitas terakhir'}'
+      .trim();
 
   return {
     ...recommendation,
-    'headline': 'Rekomendasi dari $periodContext',
+    'headline': 'Rekomendasi dari aktivitas terakhir',
     'action': title.isEmpty
-        ? 'Berdasarkan $periodContext, kami menyarankan teknik mindfulness yang paling sesuai.'
-        : 'Berdasarkan $periodContext, kami menyarankan $title sebagai teknik yang paling sesuai.',
+        ? 'Berdasarkan $activityTitle dalam $periodContext, kami menyarankan teknik mindfulness yang paling sesuai.'
+        : 'Berdasarkan $activityTitle dalam $periodContext, kami menyarankan $title sebagai teknik yang paling sesuai.',
     'analysis_review':
         recommendation['analysis_review'] ??
         'Kesimpulan ini dirangkum dari activity, mood, dan jurnal pada $periodContext.',
