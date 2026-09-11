@@ -908,7 +908,7 @@ String _factorLabel(String factor) {
     'dense_workload' => 'Jadwal padat',
     'high_wellbeing_pressure' => 'Tekanan wellbeing tinggi',
     'crisis_flag' => 'Perlu dukungan segera',
-    'teacher_self_report_high' => 'Tekanan guru tinggi',
+    'teacher_self_report_high' => 'Tekanan tinggi',
     'checkout_negative_mood' => 'Mood checkout negatif',
     'journal_pressure_terms' => 'Jurnal menekan',
     'consecutive_high_intensity' => 'Intensitas tinggi',

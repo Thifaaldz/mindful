@@ -3,13 +3,11 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 
 import '../../core/api.dart';
 import '../../core/api_client.dart';
 import '../../core/app_theme.dart';
 import '../../core/dashboard_refresh.dart';
-import '../../core/session.dart';
 import '../../widgets/app_chrome.dart';
 import 'kabat_zinn_practice_screen.dart';
 
@@ -26,9 +24,7 @@ class _AnalysisDashboardScreenState extends State<AnalysisDashboardScreen> {
   DateTime _date = DateTime.now();
   String _period = 'weekly';
   String _source = 'auto_weekly';
-  int _selfReportLevel = 5;
   bool _running = false;
-  bool _savingSelfReport = false;
   Map<String, dynamic>? _freshSnapshot;
 
   @override
@@ -104,31 +100,8 @@ class _AnalysisDashboardScreenState extends State<AnalysisDashboardScreen> {
     }
   }
 
-  Future<void> _saveSelfReport() async {
-    setState(() => _savingSelfReport = true);
-    try {
-      await Api.saveBurnoutSelfReport(level: _selfReportLevel);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Kondisi hari ini tersimpan.')),
-        );
-        _reload();
-      }
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
-      }
-    } finally {
-      if (mounted) setState(() => _savingSelfReport = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final isTeacher = context.watch<Session>().isTeacher;
-
     return Scaffold(
       body: SafeArea(
         child: RefreshIndicator(
@@ -237,17 +210,6 @@ class _AnalysisDashboardScreenState extends State<AnalysisDashboardScreen> {
                                 setState(() => _period = value),
                             onRun: _runManual,
                           ),
-                          if (isTeacher) ...[
-                            const SizedBox(height: 18),
-                            _SelfReportCard(
-                              level: _selfReportLevel,
-                              saving: _savingSelfReport,
-                              onChanged: (value) => setState(
-                                () => _selfReportLevel = value.round(),
-                              ),
-                              onSave: _saveSelfReport,
-                            ),
-                          ],
                           const SizedBox(height: 18),
                           _WeeklyChartCard(
                             source: _source,
@@ -421,60 +383,6 @@ class _TodayScaleCard extends StatelessWidget {
               _PracticeCallout(title: practiceTitle, text: practice),
             ],
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _SelfReportCard extends StatelessWidget {
-  const _SelfReportCard({
-    required this.level,
-    required this.saving,
-    required this.onChanged,
-    required this.onSave,
-  });
-
-  final int level;
-  final bool saving;
-  final ValueChanged<double> onChanged;
-  final VoidCallback onSave;
-
-  @override
-  Widget build(BuildContext context) {
-    return SoftCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Refleksi Kondisi Guru',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Seberapa berat tekanan yang terasa hari ini?',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '$level / 10',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          Slider(
-            value: level.toDouble(),
-            min: 0,
-            max: 10,
-            divisions: 10,
-            label: '$level',
-            onChanged: saving ? null : onChanged,
-          ),
-          FilledButton.icon(
-            onPressed: saving ? null : onSave,
-            icon: const Icon(Icons.check),
-            label: Text(saving ? 'Menyimpan...' : 'Simpan Kondisi'),
-          ),
         ],
       ),
     );
@@ -1957,7 +1865,7 @@ String _factorLabel(String factor) {
     'dense_workload' => 'Jadwal padat',
     'high_wellbeing_pressure' => 'Tekanan wellbeing tinggi',
     'crisis_flag' => 'Perlu dukungan segera',
-    'teacher_self_report_high' => 'Tekanan guru tinggi',
+    'teacher_self_report_high' => 'Tekanan tinggi',
     'checkout_negative_mood' => 'Mood checkout negatif',
     'journal_pressure_terms' => 'Jurnal menekan',
     'consecutive_high_intensity' => 'Intensitas tinggi',
