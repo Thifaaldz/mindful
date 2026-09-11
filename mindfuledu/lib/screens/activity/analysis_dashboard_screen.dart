@@ -1897,6 +1897,11 @@ Map<String, dynamic> _latestActivityRecommendation(
   );
   final activityTitle = '${latestReview['title'] ?? 'aktivitas terakhir'}'
       .trim();
+  final allActivityReview = _analysisReviewFromAllActivities(
+    reviews,
+    periodContext,
+  );
+  final summaryReview = '${recommendation['analysis_review'] ?? ''}'.trim();
 
   return {
     ...recommendation,
@@ -1904,9 +1909,9 @@ Map<String, dynamic> _latestActivityRecommendation(
     'action': title.isEmpty
         ? 'Berdasarkan $activityTitle dalam $periodContext, kami menyarankan teknik mindfulness yang paling sesuai.'
         : 'Berdasarkan $activityTitle dalam $periodContext, kami menyarankan $title sebagai teknik yang paling sesuai.',
-    'analysis_review':
-        recommendation['analysis_review'] ??
-        'Kesimpulan ini dirangkum dari activity, mood, dan jurnal pada $periodContext.',
+    'analysis_review': summaryReview.isNotEmpty
+        ? summaryReview
+        : allActivityReview,
     'practice_code':
         tactic['code'] ?? tactic['category'] ?? recommendation['practice_code'],
     'practice_title': title.isEmpty ? recommendation['practice_title'] : title,
@@ -1918,6 +1923,50 @@ Map<String, dynamic> _latestActivityRecommendation(
         tactic['why_this_tactic'] ?? recommendation['why_this_tactic'],
     'tactic': tactic,
   };
+}
+
+String _analysisReviewFromAllActivities(
+  List<Map<String, dynamic>> reviews,
+  String periodContext,
+) {
+  if (reviews.isEmpty) {
+    return 'Kesimpulan ini dirangkum dari activity, mood, dan jurnal pada $periodContext.';
+  }
+
+  final titles = reviews
+      .map((review) => '${review['title'] ?? ''}'.trim())
+      .where((title) => title.isNotEmpty)
+      .take(3)
+      .join(', ');
+  final categories = reviews.map((review) {
+    return '${review['condition'] ?? _categoryFromReview(review)}';
+  }).toList();
+  final elevatedCount = categories
+      .where((category) => category == 'kuning' || category == 'merah')
+      .length;
+  final moods = reviews
+      .map((review) => '${review['mood_detected'] ?? review['mood'] ?? ''}')
+      .where((mood) => mood.trim().isNotEmpty && mood != 'netral')
+      .toSet()
+      .take(3)
+      .join(', ');
+
+  final buffer = StringBuffer()
+    ..write(
+      '- Dasar analisis: $periodContext mencakup ${reviews.length} activity',
+    );
+  if (titles.isNotEmpty) buffer.write(', termasuk $titles');
+  buffer.writeln('.');
+  buffer.writeln(
+    '- Pola kondisi: ${elevatedCount == 0 ? 'sebagian besar activity masih stabil, sehingga rekomendasi dipilih dari activity terbaru yang memang membutuhkan latihan.' : '$elevatedCount activity menunjukkan tekanan yang perlu diberi jeda dan pemulihan.'}',
+  );
+  if (moods.isNotEmpty) {
+    buffer.writeln(
+      '- Mood dominan: catatan jurnal menunjukkan nuansa $moods yang menjadi konteks dalam membaca kondisi harian.',
+    );
+  }
+
+  return buffer.toString().trim();
 }
 
 String _periodRecommendationContext(String periodType) {

@@ -419,7 +419,7 @@ class _LatestAnalysisCard extends StatelessWidget {
     final hasData = analysis.isNotEmpty;
     final category = '${analysis['category'] ?? 'belum ada'}';
     final score = analysis['final_burnout_risk_score'];
-    final recommendation = _jsonMap(analysis['recommendation_summary']);
+    final recommendation = _latestActivityRecommendation(analysis);
     final color = _analysisColor(category);
 
     return SoftCard(
@@ -446,8 +446,16 @@ class _LatestAnalysisCard extends StatelessWidget {
                       : 'Jalankan analisis setelah ada aktivitas completed.',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-                if ('${recommendation['practice'] ?? ''}'.isNotEmpty) ...[
+                if ('${recommendation['practice_title'] ?? ''}'.isNotEmpty ||
+                    '${recommendation['practice'] ?? ''}'.isNotEmpty) ...[
                   const SizedBox(height: 4),
+                  if ('${recommendation['practice_title'] ?? ''}'.isNotEmpty)
+                    Text(
+                      '${recommendation['practice_title']}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   Text(
                     '${recommendation['practice']}',
                     style: Theme.of(context).textTheme.bodySmall,
@@ -497,6 +505,67 @@ class _QuickAccess extends StatelessWidget {
 Map<String, dynamic> _jsonMap(dynamic value) {
   if (value is Map) return Map<String, dynamic>.from(value);
   return <String, dynamic>{};
+}
+
+List<Map<String, dynamic>> _listOfMaps(dynamic value) {
+  if (value is List) {
+    return value
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+  return const [];
+}
+
+List<Map<String, dynamic>> _journalReviews(Map<String, dynamic> analysis) {
+  final direct = _listOfMaps(analysis['journal_reviews']);
+  if (direct.isNotEmpty) return direct;
+
+  return _listOfMaps(_jsonMap(analysis['payload'])['journal_reviews']);
+}
+
+Map<String, dynamic> _latestActivityRecommendation(
+  Map<String, dynamic> analysis,
+) {
+  final recommendation = _jsonMap(analysis['recommendation_summary']);
+  final reviews = _journalReviews(analysis);
+  if (reviews.isEmpty) return recommendation;
+
+  final sortedReviews = [...reviews]
+    ..sort((a, b) => _reviewTimestamp(b).compareTo(_reviewTimestamp(a)));
+  final latestReview = sortedReviews.firstWhere(
+    (review) => _jsonMap(review['recommended_tactic']).isNotEmpty,
+    orElse: () => const <String, dynamic>{},
+  );
+  if (latestReview.isEmpty) return recommendation;
+
+  final tactic = _jsonMap(latestReview['recommended_tactic']);
+  final title = '${tactic['title'] ?? recommendation['practice_title'] ?? ''}'
+      .trim();
+  final description =
+      '${tactic['description'] ?? tactic['practice'] ?? recommendation['practice'] ?? ''}'
+          .trim();
+
+  return {
+    ...recommendation,
+    'practice_code':
+        tactic['code'] ?? tactic['category'] ?? recommendation['practice_code'],
+    'practice_title': title.isEmpty ? recommendation['practice_title'] : title,
+    'practice': description.isEmpty ? recommendation['practice'] : description,
+    'recommended_movement':
+        tactic['recommended_movement'] ??
+        recommendation['recommended_movement'],
+    'why_this_tactic':
+        tactic['why_this_tactic'] ?? recommendation['why_this_tactic'],
+    'tactic': tactic,
+  };
+}
+
+int _reviewTimestamp(Map<String, dynamic> review) {
+  return DateTime.tryParse(
+        '${review['checked_out_at'] ?? review['activity_date'] ?? ''}',
+      )?.millisecondsSinceEpoch ??
+      0;
 }
 
 bool _isSameDay(DateTime a, DateTime b) {
