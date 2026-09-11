@@ -86,35 +86,44 @@ class ParentDashboardController extends Controller
                 ] : null,
             ],
             'analysis' => $analysis,
-            'activities' => $activities->map(fn (Activity $activity) => [
-                'id' => $activity->id,
-                'title' => $activity->title,
-                'category' => $activity->category,
-                'activity_type' => $activity->activity_type,
-                'activity_date' => $activity->activity_date?->toDateString(),
-                'start_at' => $activity->start_at?->toIso8601String(),
-                'end_at' => $activity->end_at?->toIso8601String(),
-                'status' => $activity->status,
-                'checkin_mood' => $activity->checkin_mood,
-                'checkin_intensity' => $activity->checkin_intensity,
-                'checkin_trigger' => $activity->checkin_trigger,
-                'checkout_mood' => $activity->checkout_mood,
-                'checkout_mood_detected' => $activity->checkout_mood_detected,
-                'checkout_fact' => $activity->checkout_fact,
-                'checkout_feeling' => $activity->checkout_feeling,
-                'checkout_pattern' => $activity->checkout_pattern,
-                'checkout_plan' => $activity->checkout_plan,
-                'checkout_suggestion' => $activity->checkout_suggestion,
-                'checkout_analysis_source' => $activity->checkout_analysis_source,
-                'teacher' => $activity->teacherActivity?->owner ? [
-                    'id' => $activity->teacherActivity->owner->id,
-                    'name' => $activity->teacherActivity->owner->name,
-                ] : null,
-                'class' => $activity->schoolClass ? [
-                    'id' => $activity->schoolClass->id,
-                    'name' => $activity->schoolClass->name,
-                ] : null,
-            ])->values(),
+            'activities' => $activities->map(function (Activity $activity) {
+                $hasReview = filled($activity->checkout_fact) || filled($activity->checkout_feeling);
+                $recommendedTactic = $hasReview
+                    ? $this->burnoutAnalysisService->recommendedTacticForJournalActivity($activity)
+                    : null;
+
+                return [
+                    'id' => $activity->id,
+                    'title' => $activity->title,
+                    'category' => $activity->category,
+                    'activity_type' => $activity->activity_type,
+                    'activity_date' => $activity->activity_date?->toDateString(),
+                    'start_at' => $activity->start_at?->toIso8601String(),
+                    'end_at' => $activity->end_at?->toIso8601String(),
+                    'status' => $activity->status,
+                    'checkin_mood' => $activity->checkin_mood,
+                    'checkin_intensity' => $activity->checkin_intensity,
+                    'checkin_trigger' => $activity->checkin_trigger,
+                    'checkout_mood' => $activity->checkout_mood,
+                    'checkout_mood_detected' => $activity->checkout_mood_detected,
+                    'checkout_fact' => $activity->checkout_fact,
+                    'checkout_feeling' => $activity->checkout_feeling,
+                    'checkout_pattern' => $activity->checkout_pattern,
+                    'checkout_plan' => $activity->checkout_plan,
+                    'checkout_suggestion' => $hasReview
+                        ? $this->burnoutAnalysisService->activitySuggestion($activity, $recommendedTactic)
+                        : $activity->checkout_suggestion,
+                    'checkout_analysis_source' => $activity->checkout_analysis_source,
+                    'teacher' => $activity->teacherActivity?->owner ? [
+                        'id' => $activity->teacherActivity->owner->id,
+                        'name' => $activity->teacherActivity->owner->name,
+                    ] : null,
+                    'class' => $activity->schoolClass ? [
+                        'id' => $activity->schoolClass->id,
+                        'name' => $activity->schoolClass->name,
+                    ] : null,
+                ];
+            })->values(),
         ];
     }
 }
