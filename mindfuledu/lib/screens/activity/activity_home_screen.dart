@@ -1207,7 +1207,7 @@ class _ActivityAnalysisDialogContent extends StatelessWidget {
         ),
         if (suggestion.isNotEmpty) ...[
           const SizedBox(height: 12),
-          Text(suggestion),
+          _ActivityNarrativePointList(text: suggestion),
         ],
         if (recommendedTactic.isNotEmpty) ...[
           const SizedBox(height: 14),
@@ -1279,6 +1279,117 @@ class _ActivityDialogLine extends StatelessWidget {
       ],
     );
   }
+}
+
+class _ActivityNarrativePointList extends StatelessWidget {
+  const _ActivityNarrativePointList({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final points = _activityNarrativePoints(text);
+    if (points.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var index = 0; index < points.length; index++) ...[
+          _ActivityNarrativePointLine(point: points[index]),
+          if (index != points.length - 1) const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
+class _ActivityNarrativePointLine extends StatelessWidget {
+  const _ActivityNarrativePointLine({required this.point});
+
+  final _ActivityNarrativePoint point;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.secondary;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(point.icon, size: 18, color: primary),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text.rich(
+            TextSpan(
+              children: [
+                if (point.label.isNotEmpty)
+                  TextSpan(
+                    text: '${point.label}: ',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                TextSpan(text: point.body),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ActivityNarrativePoint {
+  const _ActivityNarrativePoint({
+    required this.label,
+    required this.body,
+    required this.icon,
+  });
+
+  final String label;
+  final String body;
+  final IconData icon;
+}
+
+List<_ActivityNarrativePoint> _activityNarrativePoints(String text) {
+  return text
+      .replaceAll('\r\n', '\n')
+      .split('\n')
+      .map((line) => line.trim())
+      .where((line) => line.isNotEmpty)
+      .map((line) {
+        final cleaned = line.replaceFirst(RegExp(r'^[-•]\s*'), '').trim();
+        final separator = cleaned.indexOf(':');
+        final hasLabel = separator > 0 && separator <= 24;
+        final label = hasLabel ? cleaned.substring(0, separator).trim() : '';
+        final body = hasLabel
+            ? cleaned.substring(separator + 1).trim()
+            : cleaned;
+
+        return _ActivityNarrativePoint(
+          label: label,
+          body: body,
+          icon: _activityNarrativeIcon(label, body),
+        );
+      })
+      .toList();
+}
+
+IconData _activityNarrativeIcon(String label, String body) {
+  final key = '$label $body'.toLowerCase();
+  if (key.contains('mood')) return Icons.mood_outlined;
+  if (key.contains('pola')) return Icons.timeline;
+  if (key.contains('saran') || key.contains('masukan')) {
+    return Icons.lightbulb_outline;
+  }
+  if (key.contains('latihan')) return Icons.self_improvement;
+  if (key.contains('gerakan')) return Icons.accessibility_new;
+  if (key.contains('catatan') ||
+      key.contains('kejadian') ||
+      key.contains('perasaan')) {
+    return Icons.edit_note_outlined;
+  }
+  if (key.contains('dasar') || key.contains('kondisi')) {
+    return Icons.psychology_outlined;
+  }
+  return Icons.auto_awesome;
 }
 
 String _burnoutDimensionLabel(String dimension) {

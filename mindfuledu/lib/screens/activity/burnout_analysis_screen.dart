@@ -274,7 +274,7 @@ class _AnalysisResult extends StatelessWidget {
               ],
               if (review.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                _InsightLine(icon: Icons.psychology_outlined, text: review),
+                _NarrativePointList(text: review),
               ],
               if (tacticTitle.isNotEmpty || tacticText.isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -603,11 +603,129 @@ class _AiSuggestion extends StatelessWidget {
         children: [
           Icon(Icons.auto_awesome, color: primary),
           const SizedBox(width: 10),
-          Expanded(child: Text(text)),
+          Expanded(child: _NarrativePointList(text: text, compact: true)),
         ],
       ),
     );
   }
+}
+
+class _NarrativePointList extends StatelessWidget {
+  const _NarrativePointList({required this.text, this.compact = false});
+
+  final String text;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final points = _narrativePoints(text);
+    if (points.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var index = 0; index < points.length; index++) ...[
+          _NarrativePointLine(point: points[index]),
+          if (index != points.length - 1) SizedBox(height: compact ? 6 : 8),
+        ],
+      ],
+    );
+  }
+}
+
+class _NarrativePointLine extends StatelessWidget {
+  const _NarrativePointLine({required this.point});
+
+  final _NarrativePoint point;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.secondary;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(point.icon, size: 18, color: primary),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text.rich(
+            TextSpan(
+              children: [
+                if (point.label.isNotEmpty)
+                  TextSpan(
+                    text: '${point.label}: ',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                TextSpan(text: point.body),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _NarrativePoint {
+  const _NarrativePoint({
+    required this.label,
+    required this.body,
+    required this.icon,
+  });
+
+  final String label;
+  final String body;
+  final IconData icon;
+}
+
+List<_NarrativePoint> _narrativePoints(String text) {
+  final lines = text
+      .replaceAll('\r\n', '\n')
+      .split('\n')
+      .map((line) => line.trim())
+      .where((line) => line.isNotEmpty)
+      .toList();
+  final source = lines.length <= 1
+      ? text
+            .split(RegExp(r'(?<=[.!?])\s+(?=-?\s*[A-Z])'))
+            .map((line) => line.trim())
+            .where((line) => line.isNotEmpty)
+            .toList()
+      : lines;
+
+  return source.map((line) {
+    final cleaned = line.replaceFirst(RegExp(r'^[-•]\s*'), '').trim();
+    final separator = cleaned.indexOf(':');
+    final hasLabel = separator > 0 && separator <= 24;
+    final label = hasLabel ? cleaned.substring(0, separator).trim() : '';
+    final body = hasLabel ? cleaned.substring(separator + 1).trim() : cleaned;
+
+    return _NarrativePoint(
+      label: label,
+      body: body,
+      icon: _narrativeIcon(label, body),
+    );
+  }).toList();
+}
+
+IconData _narrativeIcon(String label, String body) {
+  final key = '$label $body'.toLowerCase();
+  if (key.contains('mood')) return Icons.mood_outlined;
+  if (key.contains('pola')) return Icons.timeline;
+  if (key.contains('saran') || key.contains('masukan')) {
+    return Icons.lightbulb_outline;
+  }
+  if (key.contains('latihan')) return Icons.self_improvement;
+  if (key.contains('gerakan')) return Icons.accessibility_new;
+  if (key.contains('catatan') ||
+      key.contains('kejadian') ||
+      key.contains('perasaan')) {
+    return Icons.edit_note_outlined;
+  }
+  if (key.contains('dasar') || key.contains('kondisi')) {
+    return Icons.psychology_outlined;
+  }
+  return Icons.auto_awesome;
 }
 
 class _TechniqueRecommendation extends StatelessWidget {
@@ -947,7 +1065,12 @@ String _cleanAnalysisText(String value) {
     RegExp(r'\bberdasarkan analisis ini,\s*', caseSensitive: false),
     '',
   );
-  text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  text = text
+      .split('\n')
+      .map((line) => line.replaceAll(RegExp(r'\s+'), ' ').trim())
+      .where((line) => line.isNotEmpty)
+      .join('\n')
+      .trim();
 
   if (text.isEmpty) return '';
   return text[0].toUpperCase() + text.substring(1);
