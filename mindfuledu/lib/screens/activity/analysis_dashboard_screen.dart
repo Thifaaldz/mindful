@@ -130,10 +130,11 @@ class _AnalysisDashboardScreenState extends State<AnalysisDashboardScreen> {
                   .toList();
               final todaySnapshot = _snapshotFromPreview(today);
               final latest =
+                  todaySnapshot ??
                   (_freshSnapshot?['category'] != null
                       ? _freshSnapshot
                       : null) ??
-                  todaySnapshot ??
+                  _latestDailyAnalysis(analyses) ??
                   analyses
                       .where((item) => item['category'] != null)
                       .firstOrNull ??
@@ -1784,6 +1785,25 @@ List<Map<String, dynamic>> _mergedAnalyses(
   ];
 }
 
+Map<String, dynamic>? _latestDailyAnalysis(
+  List<Map<String, dynamic>> analyses,
+) {
+  final daily = analyses
+      .where(
+        (item) => item['period_type'] == 'daily' && item['category'] != null,
+      )
+      .toList();
+  if (daily.isEmpty) return null;
+
+  daily.sort(
+    (a, b) => '${b['period_start'] ?? b['created_at'] ?? ''}'.compareTo(
+      '${a['period_start'] ?? a['created_at'] ?? ''}',
+    ),
+  );
+
+  return daily.first;
+}
+
 Map<String, dynamic> _freshTodayPreview(
   Map<String, dynamic> overview,
   Map<String, dynamic>? fresh,
@@ -1940,8 +1960,18 @@ Map<String, dynamic>? _reviewSnapshot(
   List<Map<String, dynamic>> analyses,
   Map<String, dynamic>? fresh,
 ) {
-  if (fresh != null && fresh.isNotEmpty) return fresh;
   if (today != null && _journalReviews(today).isNotEmpty) return today;
+  if (fresh != null &&
+      fresh.isNotEmpty &&
+      fresh['period_type'] == 'daily' &&
+      _journalReviews(fresh).isNotEmpty) {
+    return fresh;
+  }
+
+  final latestDaily = _latestDailyAnalysis(analyses);
+  if (latestDaily != null && _journalReviews(latestDaily).isNotEmpty) {
+    return latestDaily;
+  }
 
   for (final analysis in analyses) {
     if (_journalReviews(analysis).isNotEmpty) return analysis;
