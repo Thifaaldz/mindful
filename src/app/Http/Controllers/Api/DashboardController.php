@@ -64,25 +64,6 @@ class DashboardController extends Controller
             });
 
         $latestAnalysis = $this->latestTodayAnalysis($user);
-        if ($latestAnalysis === null) {
-            $latestAnalysis = $user->burnoutAnalysisSnapshots()
-                ->select([
-                    'id',
-                    'user_id',
-                    'source',
-                    'period_type',
-                    'period_start',
-                    'period_end',
-                    'data_sufficiency',
-                    'journal_score',
-                    'final_burnout_risk_score',
-                    'category',
-                    'recommendation_summary',
-                    'created_at',
-                ])
-                ->latest()
-                ->first();
-        }
         $plannedCount = (int) ($todayStats->planned_count ?? 0);
         $completedCount = (int) ($todayStats->completed_count ?? 0);
         $weightedPlannedHours = round((float) ($todayStats->weighted_planned_hours ?? 0), 2);
