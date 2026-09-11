@@ -16,7 +16,7 @@ class BurnoutAnalysisService
     private const SCORING_VERSION = 'scoring-v2.5-edumindful';
     private const MODEL_VERSION = 'php-fallback-edumindful-v2.5';
     private const THRESHOLD_VERSION = 'threshold-v2.5';
-    private const NARRATIVE_VERSION = 'narrative-v1.2';
+    private const NARRATIVE_VERSION = 'narrative-v1.4';
     private const CHECKIN_NEGATIVE_MOODS = ['cemas', 'sedih', 'marah'];
     private const CHECKOUT_NEGATIVE_MOODS = ['cemas', 'sedih', 'marah', 'lelah'];
     private const JOURNAL_PRESSURE_KEYWORDS = [
@@ -963,50 +963,60 @@ class BurnoutAnalysisService
         $title = trim((string) ($activity->title ?: 'Aktivitas ini'));
         $checkinMood = trim((string) ($activity->checkin_mood ?: '-'));
         $checkoutMood = trim((string) (($activity->checkout_mood_detected ?: $activity->checkout_mood) ?: '-'));
-        $fact = $this->shortText($activity->checkout_fact, 120);
-        $feeling = $this->shortText($activity->checkout_feeling, 120);
-        $pattern = $this->shortText($activity->checkout_pattern, 100);
-        $plan = $this->shortText($activity->checkout_plan, 100);
+        $fact = $this->shortText($activity->checkout_fact, 65);
+        $feeling = $this->shortText($activity->checkout_feeling, 65);
+        $pattern = $this->shortText($activity->checkout_pattern, 55);
+        $plan = $this->shortText($activity->checkout_plan, 55);
         $tacticTitle = trim((string) ($recommendedTactic['title'] ?? 'latihan mindfulness'));
-        $movement = $this->shortText($recommendedTactic['recommended_movement'] ?? null, 140);
 
         $conditionText = match ($condition) {
-            'merah' => 'tekanannya terbaca cukup tinggi, jadi tubuh dan emosi perlu diberi ruang pulih lebih dulu',
-            'kuning' => 'mulai menunjukkan tekanan, sehingga aktivitas berikutnya sebaiknya dimasuki dengan jeda yang lebih sadar',
-            default => 'masih relatif stabil, dan ini bisa dijaga dengan transisi yang ringan sebelum lanjut ke kegiatan lain',
+            'merah' => 'tekanannya cukup tinggi, jadi perlu jeda sebelum lanjut',
+            'kuning' => 'mulai ada tekanan, jadi respons berikutnya perlu dibuat lebih pelan',
+            default => 'masih stabil, tinggal dijaga dengan transisi ringan',
         };
 
         $parts = [
-            "{$title} {$conditionText}. ".$this->moodTransitionNarrative($checkinMood, $checkoutMood),
+            "- {$title}: {$conditionText}.",
+            "- Mood: ".$this->moodTransitionNarrative($checkinMood, $checkoutMood),
         ];
 
+        $journalContext = $this->journalContextNarrative($fact, $feeling, $pattern, $plan);
+        if ($journalContext !== '') {
+            $parts[] = "- Catatan: {$journalContext}";
+        }
+
+        $parts[] = '- Masukan: '.$this->activityNextStepNarrative($checkoutMood, $fact, $feeling).'.';
+
+        if ($tacticTitle !== '') {
+            $parts[] = "- Latihan: {$tacticTitle} bisa dibuka sebagai jeda pendek.";
+        }
+
+        return implode("\n", $parts);
+    }
+
+    private function journalContextNarrative(string $fact, string $feeling, string $pattern, string $plan): string
+    {
+        if ($fact !== '' && $feeling !== '') {
+            return "{$fact}; perasaan yang muncul {$feeling}.";
+        }
+
         if ($fact !== '') {
-            $parts[] = "Dari catatan kejadian, bagian yang menonjol adalah {$fact}. Ini memberi konteks bahwa respons emosi Anda tidak muncul begitu saja, tetapi berkaitan dengan situasi yang terjadi selama aktivitas.";
+            return "{$fact}, ini menjadi konteks utama perubahan kondisi.";
         }
 
         if ($feeling !== '') {
-            $parts[] = "Saat perasaan yang tertulis adalah {$feeling}, sistem membacanya sebagai sinyal untuk memperlambat respons sebentar sebelum mengambil tindakan berikutnya.";
+            return "{$feeling}, jadi beri ruang sebentar sebelum merespons.";
         }
 
         if ($pattern !== '') {
-            $parts[] = "Pola yang mulai terlihat adalah {$pattern}, jadi bagian ini bisa dijadikan perhatian kecil agar kejadian serupa tidak langsung menguras energi.";
+            return "pola {$pattern} mulai terlihat dan perlu diperhatikan.";
         }
 
         if ($plan !== '') {
-            $parts[] = "Rencana {$plan} sudah menjadi langkah awal yang baik; buat tetap sederhana supaya mudah dilakukan setelah aktivitas selesai.";
+            return "rencana {$plan} bisa dijadikan langkah kecil berikutnya.";
         }
 
-        $parts[] = $this->activityNextStepNarrative($checkoutMood, $fact, $feeling);
-
-        if ($tacticTitle !== '') {
-            $parts[] = "Jika ingin memakai latihan pendamping, {$tacticTitle} bisa dibuka setelah ini. Latihan ini bukan karena Anda harus langsung memperbaiki semuanya, tetapi sebagai jeda pendek agar tubuh lebih siap merespons.";
-        }
-
-        if ($movement !== '') {
-            $parts[] = "Gerakan yang bisa dipakai sebagai panduan: {$movement}";
-        }
-
-        return implode(' ', $parts);
+        return '';
     }
 
     private function moodTransitionNarrative(string $checkinMood, string $checkoutMood): string
@@ -1015,32 +1025,32 @@ class BurnoutAnalysisService
         $checkout = $checkoutMood === '-' ? '' : $checkoutMood;
 
         if ($checkin === '' && $checkout === '') {
-            return 'Mood awal dan akhir belum lengkap, jadi masukan difokuskan pada jurnal yang sudah ditulis.';
+            return 'mood awal dan akhir belum lengkap, jadi masukan difokuskan pada jurnal yang sudah ditulis.';
         }
 
         if ($checkin === '') {
-            return "Mood akhir tercatat {$checkout}; gunakan ini sebagai petunjuk kondisi tubuh setelah aktivitas.";
+            return "mood akhir tercatat {$checkout}, gunakan ini sebagai petunjuk kondisi tubuh setelah aktivitas.";
         }
 
         if ($checkout === '') {
-            return "Mood awal tercatat {$checkin}, tetapi mood akhir belum tersedia sehingga perubahan emosi belum bisa dibaca utuh.";
+            return "mood awal tercatat {$checkin}, tetapi mood akhir belum tersedia sehingga perubahan emosi belum bisa dibaca utuh.";
         }
 
         if ($checkin === $checkout) {
             return $this->isNegativeMoodName($checkout)
-                ? "Mood tetap {$checkout} dari awal sampai akhir, sehingga ada kemungkinan tekanan dari aktivitas belum benar-benar turun."
-                : "Mood tetap {$checkout} dari awal sampai akhir, ini tanda kondisi Anda cukup terjaga selama aktivitas.";
+                ? "mood tetap {$checkout} dari awal sampai akhir, sehingga tekanan dari aktivitas mungkin belum turun."
+                : "mood tetap {$checkout} dari awal sampai akhir, ini tanda kondisi Anda cukup terjaga.";
         }
 
         if (! $this->isNegativeMoodName($checkin) && $this->isNegativeMoodName($checkout)) {
-            return "Mood berubah dari {$checkin} ke {$checkout}; perubahan ini biasanya menandakan ada momen dalam aktivitas yang memicu ketegangan, kekecewaan, rasa lelah, atau kebutuhan untuk berhenti sebentar.";
+            return "mood berubah dari {$checkin} ke {$checkout}, menandakan ada momen yang memicu ketegangan atau butuh jeda.";
         }
 
         if ($this->isNegativeMoodName($checkin) && ! $this->isNegativeMoodName($checkout)) {
-            return "Mood bergerak dari {$checkin} ke {$checkout}; ini menunjukkan ada bagian dari aktivitas atau respons Anda yang mulai membantu kondisi menjadi lebih ringan.";
+            return "mood bergerak dari {$checkin} ke {$checkout}, menandakan kondisi mulai lebih ringan.";
         }
 
-        return "Mood bergerak dari {$checkin} ke {$checkout}, sehingga masukan difokuskan pada cara menjaga respons tetap sadar setelah aktivitas.";
+        return "mood bergerak dari {$checkin} ke {$checkout}, jadi respons berikutnya tetap perlu dijaga sadar.";
     }
 
     private function activityNextStepNarrative(string $checkoutMood, string $fact, string $feeling): string
@@ -1050,13 +1060,13 @@ class BurnoutAnalysisService
 
         return match ($checkoutMood) {
             'marah' => $hasStudentContext
-                ? 'Jika rasa marah muncul karena situasi dengan murid atau dinamika kelas, ambil jeda singkat sebelum memberi respons. Setelah napas lebih stabil, pilih satu kalimat yang jelas dan tenang agar batas tetap tegas tanpa memperbesar konflik.'
-                : 'Jika marah masih terasa, beri jarak sebentar sebelum membalas atau mengambil keputusan. Anda bisa menamai emosinya dulu, lalu memilih satu tindakan kecil yang tidak memperkeruh keadaan.',
-            'cemas' => 'Jika cemas masih ikut terbawa setelah aktivitas, kecilkan dulu ukuran tugas berikutnya. Pilih satu langkah paling dekat, selesaikan pelan-pelan, lalu cek kembali apakah tubuh sudah lebih lega.',
-            'sedih' => 'Jika sedih menjadi mood akhir, jangan paksa diri langsung produktif penuh. Beri ruang untuk mengakui perasaan itu, lalu lakukan satu hal kecil yang membuat situasi terasa lebih aman atau lebih tertata.',
-            'lelah' => 'Jika lelah yang paling terasa, tubuh sedang memberi tanda bahwa energi perlu diatur ulang. Kurangi perpindahan aktivitas yang terlalu cepat dan beri jeda fisik sebelum menambah beban baru.',
-            'senang', 'tenang' => 'Karena mood akhir masih positif, pertahankan pola yang membantu hari ini berjalan lebih stabil. Catat bagian yang bekerja dengan baik agar bisa diulang pada aktivitas berikutnya.',
-            default => 'Untuk langkah berikutnya, pilih respons yang kecil dan realistis: rapikan satu prioritas, ambil jeda sebentar, lalu lanjut hanya pada hal yang paling penting.',
+                ? 'ambil jeda sebelum merespons murid, lalu pilih kalimat yang tegas tetapi tenang'
+                : 'beri jarak sebentar sebelum membalas atau mengambil keputusan',
+            'cemas' => 'kecilkan tugas berikutnya menjadi satu langkah dekat',
+            'sedih' => 'akui perasaan itu dulu, lalu lakukan satu hal kecil yang membuat situasi lebih tertata',
+            'lelah' => 'beri jeda fisik sebelum menambah beban baru',
+            'senang', 'tenang' => 'pertahankan pola yang membantu kondisi tetap stabil',
+            default => 'pilih respons kecil yang realistis, lalu lanjut pada hal paling penting',
         };
     }
 
@@ -1444,39 +1454,34 @@ class BurnoutAnalysisService
         $stableTransitions = $completed
             ->filter(fn (Activity $activity) => ! $this->checkoutNegative($activity) && ! $this->checkinNegative($activity))
             ->count();
-        $relevantActivities = $this->mostRelevantActivities($completed);
         $factorText = $this->dominantFactorPhrases($dominantFactors);
         $capacityText = $periodCapacity > 0
             ? round($weightedActualHours, 2).' dari '.round($periodCapacity, 2).' jam kapasitas berbobot'
             : round($weightedActualHours, 2).' jam berbobot';
 
         $reviewParts = [
-            "Kesimpulan {$periodContext}, kondisi Anda {$conditionText}.",
-            "Dari {$activityCount} aktivitas yang selesai dan {$journalRows->count()} jurnal yang terisi, sistem melihat beban aktivitas Anda berada pada {$capacityText}. Angka ini dipadukan dengan perubahan mood dan isi jurnal, sehingga skor beban ".round($workloadScoreRaw, 2)." dan skor mood/jurnal ".round($journalScore, 2).' dipakai sebagai gambaran, bukan sebagai label mutlak.',
+            "- Kondisi {$periodContext}: {$conditionText}.",
+            "- Dasar analisis: {$activityCount} aktivitas selesai dan {$journalRows->count()} jurnal terbaca, dengan beban {$capacityText}.",
         ];
 
         if ($negativeTransitions > 0) {
-            $reviewParts[] = "Ada {$negativeTransitions} aktivitas yang membawa mood negatif pada awal atau akhir kegiatan. Artinya, beberapa momen dalam periode ini kemungkinan membutuhkan jeda respons, bukan hanya menambah target atau memaksakan diri lanjut begitu saja.";
+            $reviewParts[] = "- Mood: {$negativeTransitions} aktivitas memuat mood negatif, jadi perlu jeda respons.";
         } elseif ($stableTransitions > 0) {
-            $reviewParts[] = "Mayoritas mood yang tercatat masih stabil. Karena itu, rekomendasi diarahkan untuk menjaga ritme yang sudah membantu, bukan menaikkan kewaspadaan secara berlebihan.";
+            $reviewParts[] = "- Mood: mayoritas masih stabil, jadi fokusnya menjaga ritme.";
         }
 
         if ($factorText !== '') {
-            $reviewParts[] = "Pola yang paling tampak adalah {$factorText}; bagian ini menjadi petunjuk area yang perlu diperhatikan saat menyusun aktivitas berikutnya.";
-        }
-
-        if ($relevantActivities !== '') {
-            $reviewParts[] = "Aktivitas yang paling memengaruhi pembacaan periode ini adalah {$relevantActivities}. Dari aktivitas tersebut, sistem mencoba membaca hubungan antara beban kegiatan, mood, dan isi jurnal yang Anda tulis.";
+            $reviewParts[] = "- Pola: {$factorText}. Ini jadi perhatian untuk aktivitas berikutnya.";
         }
 
         if ($tacticTitle !== '') {
-            $reviewParts[] = "{$tacticTitle} dipilih sebagai latihan pendamping agar Anda punya cara singkat untuk menata tubuh dan perhatian setelah pola aktivitas tersebut terbaca.";
+            $reviewParts[] = "- Saran: {$tacticTitle} sebagai jeda singkat untuk menata perhatian.";
         }
 
-        $recommendation['analysis_review'] = implode(' ', $reviewParts);
+        $recommendation['analysis_review'] = implode("\n", $reviewParts);
 
         if ($tacticTitle !== '') {
-            $recommendation['action'] = "Berdasarkan {$periodContext}, buka {$tacticTitle} sebagai gerakan/latihan utama. Gunakan setelah aktivitas yang paling menguras atau sebelum berpindah ke aktivitas berikutnya.";
+            $recommendation['action'] = "Berdasarkan {$periodContext}, buka {$tacticTitle} sebagai jeda singkat sebelum lanjut.";
         }
 
         $recommendation['risk_reduction_steps'] = $this->riskReductionSteps($category, $dominantFactors, $role);
@@ -1496,9 +1501,9 @@ class BurnoutAnalysisService
     private function conditionPhrase(string $category): string
     {
         return match ($category) {
-            'merah' => 'berada di area merah, artinya tekanan aktivitas dan/atau mood perlu segera dipulihkan',
-            'kuning' => 'berada di area kuning, artinya mulai ada tanda tekanan dari aktivitas atau jurnal',
-            default => 'berada di area hijau, artinya beban dan mood masih relatif terkendali',
+            'merah' => 'area merah, tekanan perlu dipulihkan lebih dulu',
+            'kuning' => 'area kuning, mulai ada tanda tekanan',
+            default => 'area hijau, beban dan mood masih terkendali',
         };
     }
 
