@@ -39,19 +39,44 @@ class ParentResource extends Resource
 
     public static function canCreate(): bool
     {
-        return false;
+        return (bool) auth()->user()?->isSchoolAdmin();
     }
 
     public static function canEdit($record): bool
     {
-        return (bool) auth()->user()?->isSchoolAdmin();
+        return auth()->user()?->isSchoolAdmin()
+            && static::parentBelongsToSchool($record);
+    }
+
+    public static function canView($record): bool
+    {
+        return auth()->user()?->isSchoolAdmin()
+            && static::parentBelongsToSchool($record);
+    }
+
+    public static function canDelete($record): bool
+    {
+        return auth()->user()?->isSchoolAdmin()
+            && static::parentBelongsToSchool($record)
+            && ! $record->parentChildren()
+                ->where('school_id', '!=', static::schoolId())
+                ->exists();
     }
 
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Forms\Components\TextInput::make('name')->label('Nama'),
-            Forms\Components\TextInput::make('email')->label('Email'),
+            Forms\Components\Placeholder::make('school_display')
+                ->label('Sekolah')
+                ->content(fn () => auth()->user()?->schoolModel?->name ?? '-')
+                ->columnSpanFull(),
+            Forms\Components\TextInput::make('name')->label('Nama')->required()->maxLength(255),
+            Forms\Components\TextInput::make('email')
+                ->label('Email')
+                ->email()
+                ->required()
+                ->unique(ignoreRecord: true)
+                ->maxLength(255),
             Forms\Components\Section::make('Manajemen Password')
                 ->description('Isi hanya jika orang tua lupa password atau perlu reset akses.')
                 ->columns(2)
@@ -63,11 +88,13 @@ class ParentResource extends Resource
                         ->revealable()
                         ->minLength(8)
                         ->dehydrateStateUsing(fn ($state) => Hash::make($state))
-                        ->dehydrated(fn ($state) => filled($state)),
+                        ->dehydrated(fn ($state) => filled($state))
+                        ->required(fn (string $context): bool => $context === 'create'),
                     Forms\Components\TextInput::make('password_confirmation')
                         ->label('Konfirmasi Password Baru')
                         ->password()
                         ->revealable()
+                        ->required(fn (string $context): bool => $context === 'create')
                         ->dehydrated(false),
                     Forms\Components\Toggle::make('must_change_password')
                         ->label('Wajib ganti password saat login berikutnya')
@@ -85,6 +112,11 @@ class ParentResource extends Resource
                 Tables\Columns\TextColumn::make('email')->label('Email')->searchable(),
                 Tables\Columns\TextColumn::make('parentChildren.name')
                     ->label('Anak')
+                    ->getStateUsing(fn (User $record): array => $record->parentChildren()
+                        ->where('school_id', static::schoolId())
+                        ->orderBy('name')
+                        ->pluck('name')
+                        ->all())
                     ->badge(),
                 Tables\Columns\TextColumn::make('latestLoginHistory.logged_in_at')
                     ->label('Login Terakhir')
@@ -95,6 +127,7 @@ class ParentResource extends Resource
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make(),
             ]);
     }
 
@@ -102,8 +135,19 @@ class ParentResource extends Resource
     {
         return [
             'index' => Pages\ListParents::route('/'),
+            'create' => Pages\CreateParent::route('/create'),
             'view' => Pages\ViewParent::route('/{record}'),
             'edit' => Pages\EditParent::route('/{record}/edit'),
         ];
+    }
+
+    private static function parentBelongsToSchool(User $record): bool
+    {
+        $schoolId = static::schoolId();
+
+        return (int) $record->school_id === (int) $schoolId
+            || $record->parentChildren()
+                ->where('school_id', $schoolId)
+                ->exists();
     }
 }

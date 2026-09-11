@@ -37,14 +37,35 @@ class StudentResource extends Resource
 
     public static function canCreate(): bool
     {
-        return false;
+        return (bool) auth()->user()?->isSchoolAdmin();
+    }
+
+    public static function canDelete($record): bool
+    {
+        return auth()->user()?->isSchoolAdmin()
+            && (int) $record->school_id === (int) static::schoolId();
+    }
+
+    public static function canEdit($record): bool
+    {
+        return auth()->user()?->isSchoolAdmin()
+            && (int) $record->school_id === (int) static::schoolId();
     }
 
     public static function form(Form $form): Form
     {
         return $form->schema([
+            Forms\Components\Placeholder::make('school_display')
+                ->label('Sekolah')
+                ->content(fn () => auth()->user()?->schoolModel?->name ?? '-')
+                ->columnSpanFull(),
             Forms\Components\TextInput::make('name')->label('Nama')->required()->maxLength(255),
-            Forms\Components\TextInput::make('email')->label('Email')->email()->required()->maxLength(255),
+            Forms\Components\TextInput::make('email')
+                ->label('Email')
+                ->email()
+                ->required()
+                ->unique(ignoreRecord: true)
+                ->maxLength(255),
             Forms\Components\Select::make('class_id')
                 ->label('Kelas')
                 ->options(fn () => SchoolClass::query()
@@ -64,6 +85,7 @@ class StudentResource extends Resource
                     'approved' => 'Approved',
                     'rejected' => 'Rejected',
                 ])
+                ->default('approved')
                 ->required(),
             Forms\Components\Textarea::make('rejection_reason')
                 ->label('Alasan Penolakan')
@@ -79,11 +101,13 @@ class StudentResource extends Resource
                         ->revealable()
                         ->minLength(8)
                         ->dehydrateStateUsing(fn ($state) => Hash::make($state))
-                        ->dehydrated(fn ($state) => filled($state)),
+                        ->dehydrated(fn ($state) => filled($state))
+                        ->required(fn (string $context): bool => $context === 'create'),
                     Forms\Components\TextInput::make('password_confirmation')
                         ->label('Konfirmasi Password Baru')
                         ->password()
                         ->revealable()
+                        ->required(fn (string $context): bool => $context === 'create')
                         ->dehydrated(false),
                     Forms\Components\Toggle::make('must_change_password')
                         ->label('Wajib ganti password saat login berikutnya')
@@ -132,6 +156,7 @@ class StudentResource extends Resource
                 static::approveUserAction(),
                 static::rejectUserAction(),
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make(),
             ]);
     }
 
@@ -139,6 +164,7 @@ class StudentResource extends Resource
     {
         return [
             'index' => Pages\ListStudents::route('/'),
+            'create' => Pages\CreateStudent::route('/create'),
             'edit' => Pages\EditStudent::route('/{record}/edit'),
         ];
     }

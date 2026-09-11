@@ -11,6 +11,13 @@ class EditTeacher extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        $school = auth()->user()?->schoolModel;
+
+        $data['school_id'] = $school?->id;
+        $data['school'] = $school?->name;
+        $data['class_id'] = null;
+        $data['student_verification_code'] = null;
+
         if (($data['approval_status'] ?? null) === 'approved') {
             $data['approved_at'] = $this->record->approved_at ?: now();
             $data['approved_by'] = $this->record->approved_by ?: auth()->id();
@@ -20,5 +27,10 @@ class EditTeacher extends EditRecord
         }
 
         return $data;
+    }
+
+    protected function afterSave(): void
+    {
+        $this->record->syncRoles(['teacher']);
     }
 }
