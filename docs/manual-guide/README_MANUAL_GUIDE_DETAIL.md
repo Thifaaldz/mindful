@@ -4,6 +4,12 @@ Dokumen ini adalah rancangan manual guide video MindfulEdu secara lengkap. Fokus
 
 Dokumen ini berbeda dari README perkenalan sistem. File ini khusus untuk kebutuhan membuat video panduan penggunaan aplikasi.
 
+Untuk knowledge aplikasi terbaru, gunakan juga:
+
+```text
+docs/manual-guide/README_KNOWLEDGE_APLIKASI_TERBARU.md
+```
+
 ---
 
 ## 1. Tujuan Manual Guide
@@ -19,6 +25,16 @@ Target penonton:
 - siswa yang mencatat activity, jurnal, analisis, dan mindfulness;
 - parent yang memantau anak;
 - penguji, dosen, atau stakeholder yang ingin melihat flow sistem.
+
+Status terbaru yang harus disebutkan dalam video:
+
+- rekomendasi di Home Analisis dan Screen Analisis sudah satu sumber;
+- rekomendasi utama memakai kesimpulan harian/periode, bukan rekomendasi utama per activity;
+- admin sekolah hanya mengelola user sekolahnya sendiri;
+- approval guru/siswa tidak mengirim email otomatis;
+- sekolah pada proses lengkapi akun dibuat terkunci jika sudah dipilih saat register;
+- FastAPI berjalan sebagai service pendukung analisis;
+- toolkit berisi teknik utama dan teknik tambahan seperti STOP, Grounding 3-2-1, Napas 4-7-8, RAIN, dan Jurnal Reflektif Harian.
 
 Hasil akhir video yang disarankan:
 

@@ -2,6 +2,12 @@
 
 Dokumen ini dipakai sebagai bahan pembuka video, presentasi, atau dokumentasi umum MindfulEdu. Isinya menjelaskan tujuan aplikasi, pengguna sistem, fitur utama, dan gambaran alur dari awal sampai akhir.
 
+Dokumen knowledge terbaru yang lebih lengkap ada di:
+
+```text
+docs/manual-guide/README_KNOWLEDGE_APLIKASI_TERBARU.md
+```
+
 ---
 
 ## 1. Apa Itu MindfulEdu
@@ -20,7 +26,24 @@ MindfulEdu bukan alat diagnosis medis. Analisis burnout yang ditampilkan adalah 
 
 ---
 
-## 2. Tujuan Sistem
+## 2. Status Terbaru Sistem
+
+Kondisi sistem saat ini:
+
+- aplikasi memakai website publik, aplikasi Flutter, Laravel API, Filament Admin Panel, MariaDB, dan Python/FastAPI;
+- pendaftaran sekolah memakai nested choice wilayah Indonesia: provinsi, kota/kabupaten, lalu kecamatan;
+- guru dan siswa yang register harus approved sebelum login;
+- admin sekolah hanya mengelola guru, siswa, parent, kelas, activity, dan analisis sekolahnya sendiri;
+- approval guru/siswa tidak dikirim sebagai email otomatis, karena pemberitahuan dapat dilakukan secara pribadi;
+- pada halaman lengkapi akun, sekolah pengguna yang sudah dipilih saat register bersifat terkunci agar tidak berpindah sekolah sembarangan;
+- analisis Home dan Screen Analisis memakai sumber rekomendasi harian yang sama;
+- rekomendasi utama tidak lagi memakai rekomendasi per activity sebagai tampilan utama;
+- FastAPI tetap berjalan sebagai service pendukung analisis/scoring, sedangkan Laravel tetap punya fallback rule;
+- toolkit mindfulness sudah berisi teknik utama dan teknik tambahan seperti STOP, Grounding 3-2-1, Napas 4-7-8, RAIN, dan Jurnal Reflektif Harian.
+
+---
+
+## 3. Tujuan Sistem
 
 Tujuan utama MindfulEdu:
 
@@ -37,7 +60,7 @@ Tujuan utama MindfulEdu:
 
 ---
 
-## 3. Pengguna Sistem
+## 4. Pengguna Sistem
 
 MindfulEdu memiliki lima role utama.
 
@@ -53,7 +76,7 @@ Setiap role memiliki hak akses yang berbeda. Data sekolah tidak dicampur antar s
 
 ---
 
-## 4. Komponen Sistem
+## 5. Komponen Sistem
 
 | Komponen | Fungsi |
 |---|---|
@@ -76,7 +99,7 @@ Admin Panel  : https://mindfulapps.pkmueu.online/admin
 
 ---
 
-## 5. Alur Besar Sistem
+## 6. Alur Besar Sistem
 
 Alur sistem dari awal:
 
@@ -102,9 +125,9 @@ Sekolah daftar dari website
 
 ---
 
-## 6. Fitur Utama
+## 7. Fitur Utama
 
-### 6.1 Pendaftaran Sekolah
+### 7.1 Pendaftaran Sekolah
 
 Sekolah mendaftar melalui website publik. Form pendaftaran memakai pilihan wilayah bertingkat:
 
@@ -114,7 +137,7 @@ Provinsi -> Kota/Kabupaten -> Kecamatan
 
 Setelah submit, sekolah berstatus pending sampai disetujui super admin.
 
-### 6.2 Approval Akun
+### 7.2 Approval Akun
 
 Guru dan siswa yang register belum langsung bisa login. Akun mereka harus disetujui oleh admin sekolah terkait atau super admin.
 
@@ -125,7 +148,7 @@ Aturan:
 - super admin dapat melihat semua pendaftaran;
 - approval tidak mengirim email otomatis.
 
-### 6.3 Activity Tracking
+### 7.3 Activity Tracking
 
 Activity digunakan untuk mencatat kegiatan guru dan siswa.
 
@@ -144,7 +167,7 @@ Activity memiliki:
 - jurnal;
 - rekomendasi mindfulness.
 
-### 6.4 Check-In
+### 7.4 Check-In
 
 Check-in mencatat kondisi sebelum activity.
 
@@ -154,7 +177,7 @@ Data yang dicatat:
 - intensitas mood;
 - alasan/pemicu.
 
-### 6.5 Check-Out dan Jurnal
+### 7.5 Check-Out dan Jurnal
 
 Check-out mencatat kondisi setelah activity.
 
@@ -167,7 +190,7 @@ Data yang dicatat:
 - rencana ke depan;
 - tag burnout khusus guru.
 
-### 6.6 Analisis Burnout
+### 7.6 Analisis Burnout
 
 Analisis menggabungkan workload dan wellbeing.
 
@@ -194,7 +217,14 @@ Kategori:
 | Kuning | 40 - 69.99 |
 | Merah | 70 - 100 |
 
-### 6.7 Toolkit Mindfulness
+Rekomendasi analisis saat ini:
+
+- rekomendasi utama dibuat dari kesimpulan harian/periode;
+- Home Analisis dan Screen Analisis memakai rekomendasi yang sama;
+- jika snapshot analisis harian masih valid, sistem memakai snapshot tersebut agar hasil tidak berbeda;
+- jika belum ada skor hari ini, Home tidak mengambil rekomendasi lama dari hari/periode lain.
+
+### 7.7 Toolkit Mindfulness
 
 Toolkit berisi teknik mindfulness yang bisa dijalankan step-by-step. Beberapa teknik memiliki avatar animasi dan TTS.
 
@@ -211,7 +241,9 @@ Contoh teknik:
 - RAIN;
 - Jurnal Reflektif Harian.
 
-### 6.8 Observasi Siswa
+Informal Mindfulness dapat dijelaskan sebagai latihan sehari-hari yang meliputi Mindful Drinking, Mindful Eating, dan Mindful Walking to Class.
+
+### 7.8 Observasi Siswa
 
 Guru dapat melihat observasi siswa pada activity kelas yang dibuat oleh guru tersebut.
 
@@ -225,7 +257,7 @@ Data yang terlihat:
 - ringkasan analisis;
 - rekomendasi.
 
-### 6.9 Parent Monitoring
+### 7.9 Parent Monitoring
 
 Parent dapat memantau anak setelah memasukkan kode verifikasi siswa dan sekolah yang sesuai.
 
@@ -241,7 +273,7 @@ Parent tidak dapat mengubah activity atau jurnal anak.
 
 ---
 
-## 7. Naskah Opening Video
+## 8. Naskah Opening Video
 
 ```text
 MindfulEdu adalah aplikasi pendamping sekolah untuk membantu guru, siswa, dan orang tua memahami aktivitas harian, mood, jurnal refleksi, serta kondisi burnout. Sistem ini dimulai dari pendaftaran sekolah, approval akun, pencatatan activity, check-in, check-out, analisis, hingga rekomendasi latihan mindfulness.
@@ -253,7 +285,7 @@ Analisis di MindfulEdu bukan diagnosis medis, tetapi alat bantu refleksi agar pe
 
 ---
 
-## 8. Checklist Video Perkenalan
+## 9. Checklist Video Perkenalan
 
 ```text
 [ ] Tampilkan landing page
@@ -266,6 +298,8 @@ Analisis di MindfulEdu bukan diagnosis medis, tetapi alat bantu refleksi agar pe
 [ ] Jelaskan analisis burnout
 [ ] Jelaskan rekomendasi mindfulness
 [ ] Jelaskan parent monitoring
+[ ] Jelaskan bahwa rekomendasi Home dan Screen Analisis sudah satu sumber
+[ ] Jelaskan bahwa admin sekolah hanya mengelola data sekolahnya sendiri
+[ ] Jelaskan kegiatan mindfulness utama dan tambahan
 [ ] Tutup dengan manfaat sistem
 ```
-

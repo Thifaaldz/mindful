@@ -4,6 +4,12 @@ Dokumen ini menjelaskan MindfulEdu sebagai sistem: tujuan, aktor, fitur, alur da
 
 Dokumen ini berbeda dari manual guide video. File ini dipakai untuk memahami sistem secara konseptual dan teknis.
 
+Untuk ringkasan knowledge terbaru yang lebih praktis, baca juga:
+
+```text
+docs/manual-guide/README_KNOWLEDGE_APLIKASI_TERBARU.md
+```
+
 ---
 
 ## 1. Ringkasan Sistem
@@ -24,7 +30,26 @@ MindfulEdu bukan alat diagnosis medis. Hasil analisis digunakan sebagai pendukun
 
 ---
 
-## 2. Tujuan Sistem
+## 2. Status Terbaru Sistem
+
+Update penting sistem saat ini:
+
+| Area | Status Terbaru |
+|---|---|
+| Pendaftaran sekolah | Memakai nested choice provinsi, kota/kabupaten, dan kecamatan |
+| Approval guru/siswa | Masuk ke super admin dan admin sekolah terkait, bukan ke semua admin sekolah |
+| Email approval | Approval tidak perlu mengirim email otomatis |
+| Admin sekolah | Bisa CRUD guru, siswa, dan parent hanya untuk sekolahnya sendiri |
+| Lengkapi akun | Sekolah dibuat terkunci jika sudah dipilih saat register |
+| Analisis Home dan Screen | Rekomendasi disamakan memakai sumber harian/periode yang sama |
+| Per activity recommendation | Tidak menjadi rekomendasi utama di tampilan Home/Screen Analisis |
+| Snapshot analisis | Preview memakai snapshot valid agar rekomendasi tidak berbeda antar layar |
+| FastAPI | Tetap berjalan sebagai service pendukung scoring/narasi/rekomendasi |
+| Toolkit | Berisi teknik utama dan teknik tambahan dengan avatar animasi pada asset yang tersedia |
+
+---
+
+## 3. Tujuan Sistem
 
 Tujuan utama:
 
@@ -50,7 +75,7 @@ Masalah yang diselesaikan:
 
 ---
 
-## 3. Aktor dan Role
+## 4. Aktor dan Role
 
 | Role | Fungsi Utama |
 |---|---|
@@ -63,7 +88,9 @@ Masalah yang diselesaikan:
 Aturan akses:
 
 - super admin dapat melihat semua data;
-- admin sekolah hanya melihat data sekolahnya;
+- admin sekolah hanya melihat dan mengelola data sekolahnya;
+- admin sekolah dapat CRUD guru, siswa, dan parent sekolahnya sendiri;
+- admin sekolah tidak boleh melihat, mengubah, atau memindahkan data sekolah lain;
 - guru hanya melihat data activity sendiri dan observasi siswa pada activity kelas miliknya;
 - siswa hanya melihat data dirinya dan activity kelas yang sesuai;
 - parent hanya melihat anak yang sudah terhubung;
@@ -71,7 +98,7 @@ Aturan akses:
 
 ---
 
-## 4. Komponen Teknis
+## 5. Komponen Teknis
 
 | Komponen | Fungsi |
 |---|---|
@@ -106,7 +133,7 @@ Website / Flutter
 
 ---
 
-## 5. Alur Sistem Dari Awal Sampai Akhir
+## 6. Alur Sistem Dari Awal Sampai Akhir
 
 ```text
 Sekolah daftar di website
@@ -132,7 +159,7 @@ Sekolah daftar di website
 
 ---
 
-## 6. Pendaftaran Sekolah
+## 7. Pendaftaran Sekolah
 
 Pendaftaran sekolah dilakukan dari website publik.
 
@@ -181,7 +208,7 @@ Status sekolah:
 
 ---
 
-## 7. Register dan Approval Pengguna
+## 8. Register dan Approval Pengguna
 
 Guru dan siswa:
 
@@ -213,7 +240,7 @@ Aturan:
 
 ---
 
-## 8. Login dan Sesi
+## 9. Login dan Sesi
 
 Login berbasis role:
 
@@ -235,7 +262,7 @@ Prinsip keamanan sesi:
 
 ---
 
-## 9. Activity Tracking
+## 10. Activity Tracking
 
 Activity adalah pusat data sistem.
 
@@ -278,7 +305,7 @@ Activity siswa:
 
 ---
 
-## 10. Check-In
+## 11. Check-In
 
 Check-in mencatat kondisi sebelum activity.
 
@@ -310,7 +337,7 @@ Pada activity kelas:
 
 ---
 
-## 11. Check-Out dan Jurnal
+## 12. Check-Out dan Jurnal
 
 Check-out menutup activity dan memicu data analisis.
 
@@ -344,7 +371,7 @@ Pada activity kelas:
 
 ---
 
-## 12. Analisis Burnout
+## 13. Analisis Burnout
 
 Analisis membaca activity selesai, durasi aktual, intensity factor, mood, jurnal, burnout tags, dan self report jika ada.
 
@@ -391,7 +418,7 @@ Catatan:
 
 ---
 
-## 13. Rekomendasi Sistem
+## 14. Rekomendasi Sistem
 
 Rekomendasi dibuat dari faktor dominan dalam periode.
 
@@ -431,9 +458,9 @@ Contoh mapping:
 
 ---
 
-## 14. Kegiatan Mindfulness Di Sistem
+## 15. Kegiatan Mindfulness Di Sistem
 
-### 14.1 Teknik STOP
+### 15.1 Teknik STOP
 
 Fungsi: jeda cepat agar pengguna tidak langsung bereaksi saat emosi naik.
 
@@ -453,7 +480,7 @@ Cocok untuk:
 - konflik;
 - reaksi impulsif.
 
-### 14.2 Grounding 3-2-1
+### 15.2 Grounding 3-2-1
 
 Fungsi: mengembalikan perhatian ke lingkungan nyata.
 
@@ -473,7 +500,7 @@ Cocok untuk:
 - kewalahan;
 - pikiran terlalu penuh.
 
-### 14.3 Napas 4-7-8
+### 15.3 Napas 4-7-8
 
 Fungsi: menenangkan tubuh dengan pola napas terstruktur.
 
@@ -494,7 +521,7 @@ Cocok untuk:
 - sulit tidur;
 - tubuh terlalu aktif.
 
-### 14.4 Jeda Napas 3 Menit
+### 15.4 Jeda Napas 3 Menit
 
 Fungsi: transisi pendek antara satu aktivitas dan aktivitas lain.
 
@@ -514,7 +541,7 @@ Cocok untuk:
 - tekanan ringan;
 - butuh fokus ulang.
 
-### 14.5 Awareness of Breathing
+### 15.5 Awareness of Breathing
 
 Fungsi: menjaga perhatian pada napas natural tanpa mengubahnya.
 
@@ -535,7 +562,7 @@ Cocok untuk:
 - menjaga fokus;
 - menjaga ritme harian.
 
-### 14.6 Mindful Breathing
+### 15.6 Mindful Breathing
 
 Fungsi: memakai napas sebagai anchor perhatian.
 
@@ -555,7 +582,7 @@ Cocok untuk:
 - stres ringan;
 - jeda setelah activity.
 
-### 14.7 Focused Attention Meditation
+### 15.7 Focused Attention Meditation
 
 Fungsi: mempertahankan perhatian pada satu anchor.
 
@@ -575,7 +602,7 @@ Cocok untuk:
 - fokus belajar;
 - kebiasaan berpindah perhatian.
 
-### 14.8 Body Scan Singkat
+### 15.8 Body Scan Singkat
 
 Fungsi: memindai tubuh untuk membaca ketegangan.
 
@@ -601,7 +628,7 @@ Cocok untuk:
 - tubuh tegang;
 - pemulihan singkat.
 
-### 14.9 Body Scan Penuh
+### 15.9 Body Scan Penuh
 
 Fungsi: pemulihan lebih panjang saat sinyal burnout tinggi.
 
@@ -614,7 +641,7 @@ Cocok untuk:
 - pemulihan panjang;
 - tekanan besar.
 
-### 14.10 Sitting Meditation
+### 15.10 Sitting Meditation
 
 Fungsi: menyadari napas, tubuh, suara, pikiran, dan emosi.
 
@@ -637,7 +664,7 @@ Cocok untuk:
 - emosi bercampur;
 - kewalahan.
 
-### 14.11 Mindful Movement
+### 15.11 Mindful Movement
 
 Fungsi: peregangan ringan dengan perhatian penuh.
 
@@ -661,7 +688,7 @@ Cocok untuk:
 - lelah fisik;
 - aktivitas padat.
 
-### 14.12 Walking Meditation
+### 15.12 Walking Meditation
 
 Fungsi: berjalan pelan sambil menyadari tubuh, langkah, napas, dan lingkungan.
 
@@ -684,7 +711,7 @@ Cocok untuk:
 - butuh bergerak;
 - transisi antar kelas.
 
-### 14.13 Open Monitoring
+### 15.13 Open Monitoring
 
 Fungsi: mengamati pengalaman yang muncul tanpa memilih atau langsung bereaksi.
 
@@ -706,7 +733,7 @@ Cocok untuk:
 - emosi bercampur;
 - latihan non-reactivity.
 
-### 14.14 Mindfulness of Sounds
+### 15.14 Mindfulness of Sounds
 
 Fungsi: memakai suara sebagai anchor perhatian.
 
@@ -727,7 +754,7 @@ Cocok untuk:
 - latihan ringan;
 - pikiran bergerak terus.
 
-### 14.15 RAIN
+### 15.15 RAIN
 
 Fungsi: membantu pengguna menghadapi emosi berat dengan self-compassion.
 
@@ -748,7 +775,7 @@ Cocok untuk:
 - frustrasi;
 - keras pada diri sendiri.
 
-### 14.16 Loving-Kindness Meditation
+### 15.16 Loving-Kindness Meditation
 
 Fungsi: melatih niat baik untuk diri sendiri dan orang lain.
 
@@ -769,7 +796,7 @@ Cocok untuk:
 - sedih;
 - butuh self-compassion.
 
-### 14.17 Mountain Meditation
+### 15.17 Mountain Meditation
 
 Fungsi: memakai visualisasi gunung untuk melatih kestabilan saat kondisi berubah.
 
@@ -791,7 +818,7 @@ Cocok untuk:
 - perubahan besar;
 - latihan acceptance.
 
-### 14.18 Informal Mindfulness
+### 15.18 Informal Mindfulness
 
 Fungsi: membawa mindfulness ke aktivitas sehari-hari.
 
@@ -810,7 +837,7 @@ Cocok untuk:
 - prevention;
 - maintenance.
 
-### 14.19 Jurnal Reflektif Harian
+### 15.19 Jurnal Reflektif Harian
 
 Fungsi: membaca pengalaman harian melalui tulisan.
 
@@ -833,7 +860,7 @@ Cocok untuk:
 
 ---
 
-## 15. Parent Monitoring
+## 16. Parent Monitoring
 
 Parent melihat data anak yang sudah terhubung.
 
@@ -866,7 +893,7 @@ Batasan:
 
 ---
 
-## 16. Observasi Siswa Oleh Guru
+## 17. Observasi Siswa Oleh Guru
 
 Observasi siswa berasal dari activity kelas.
 
@@ -897,7 +924,7 @@ Data observasi:
 
 ---
 
-## 17. Reminder dan Notifikasi
+## 18. Reminder dan Notifikasi
 
 Notifikasi menggunakan local notification di aplikasi Flutter.
 
@@ -918,7 +945,7 @@ Catatan:
 
 ---
 
-## 18. Data Utama Sistem
+## 19. Data Utama Sistem
 
 | Tabel | Fungsi |
 |---|---|
@@ -941,7 +968,7 @@ Catatan:
 
 ---
 
-## 19. API Utama
+## 20. API Utama
 
 Endpoint publik:
 
@@ -1007,7 +1034,7 @@ POST /api/parent/children
 
 ---
 
-## 20. Ringkasan Akhir
+## 21. Ringkasan Akhir
 
 MindfulEdu menjalankan siklus:
 
